@@ -1,0 +1,36 @@
+{
+  "id": {
+    "type": "pri"
+  },
+  "title": {
+    "type": "title"
+  },
+  "urlname": {
+    "type": "link",
+    "edit": false
+  },
+  "cover": {
+    "type": "cover",
+    "list": true
+  },
+  "data": {
+    "type": "datetime",
+    "null": false,
+    "default": "datetime",
+    "edit": false,
+    "list": true
+  },
+  "user": {
+    "type": "1-n",
+    "table": "user",
+    "edit": false,
+    "null": false
+  },
+  "folder": {
+    "type": "text",
+    "size": 32,
+    "edit": false,
+    "null": false,
+    "default": "gallery"
+  }
+}
