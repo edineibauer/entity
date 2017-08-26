@@ -9,14 +9,27 @@
 
 namespace Entity;
 
+use ConnCrud\Read;
 use ConnCrud\TableCrud;
 use Helpers\Check;
 
 abstract class EntityInsertData
 {
-    private $entity;
+    private $entityJson;
+    private $entityDados;
     private $table;
     private $erro;
+
+    /**
+     * @param array $entity
+     * @param array $entidadeFields
+     */
+    protected function setEntityArray(array $entity, array $entidadeFields)
+    {
+        $this->entityDados = !isset($entity[$this->table]) ? array($this->table => $entity) : $entity;
+        $this->entityJson = $entidadeFields;
+        $this->insertEntity();
+    }
 
     /**
      * @param mixed $table
@@ -28,6 +41,7 @@ abstract class EntityInsertData
 
     /**
      * @param mixed $erro
+     * @param mixed $column
      */
     protected function setErro($erro, $column)
     {
@@ -46,106 +60,100 @@ abstract class EntityInsertData
         return $erro;
     }
 
-    /**
-     * @param array $entity
-     */
-    protected function setEntityArray(array $entity)
-    {
-        if(!isset($entity[$this->table])) {
-            $this->entity[$this->table] = $entity;
-        } else {
-            $this->entity = $entity;
-        }
-        $this->insertEntity();
-    }
-
-    /**
-     * @param string $entity
-     */
-    protected function setEntityJson(string $entity)
-    {
-        $this->setEntityArray(json_decode($entity, true));
-    }
-
     private function insertEntity()
     {
-        foreach ($this->entity as $this->table => $dados) {
+        //Para cada entidade enviada
+        foreach ($this->entityDados as $table => $dados) {
+            if (isset($dados['id'])) {
+                $create = new TableCrud($table);
+                $create->load($dados['id']);
+                if ($create->exist()) {
+                    $dados = $this->validateDados($dados);
+                    if (!$this->erro) {
+                        $create->setDados($dados);
+                        $create->save();
+                    } else {
+                        var_dump($this->erro);
+                    }
+                } else {
+                    $this->erro['id'] = "Falhou. Id não encontrado para atualização das informações.";
+                    var_dump($this->erro);
+                }
 
-            $json = new Entity($this->table);
-            $json = $json->getEntity();
+            } else {
+                $dados = $this->validateDados($dados);
+                if (!$this->erro) {
+                    $create = new TableCrud($table);
+                    $create->loadArray($dados);
+                    $create->save();
+                } else {
+                    var_dump($this->erro);
+                }
 
-            foreach ($json as $column => $fields) {
-                if (!isset($json[$column]['key']) || $json[$column]['key'] !== "primary") {
-                    $this->entity[$this->table][$column] = $this->checkValue($json, $column, $dados[$column] ?? null);
+            }
+        }
+    }
+
+    private function validateDados($dados)
+    {
+        $update = null;
+        $newdados = array();
+        foreach ($this->entityJson as $column => $fields) {
+            if(!$this->erro) {
+                if (!isset($this->entityJson[$column]['key']) || $this->entityJson[$column]['key'] !== "primary") {
+                    if(!$update || $this->checkIsUpdated($column)) {
+                        $newdados[$column] = $this->checkValue($column, $update, $dados[$column] ?? null);
+                    }
                     if ($this->erro) {
                         break;
                     }
+
+                } elseif (isset($dados[$column]) && $dados[$column] > 0) {
+                    $update['column'] = $column;
+                    $update['value'] = $dados[$column];
                 }
+            } else {
+                var_dump($this->erro);
             }
         }
 
-        if (!$this->erro) {
-            $this->save($this->entity);
-        } else {
-            var_dump($this->erro);
-        }
+        return $newdados;
     }
 
-    private function save($entity)
+    private function checkIsUpdated($column)
     {
-        foreach ($entity as $table => $dados) {
-            $create = new TableCrud($table);
-            $create->loadArray($dados);
-            $create->save();
-        }
+        return isset($this->entityJson[$column]['update']) ? $this->entityJson[$column]['update'] : true;
     }
 
-    private function checkValue($json, $column, $value = null)
+    private function checkValue($column, $update = null, $value = null)
     {
-        $value = $this->checkDefault($json[$column], $value);
-        if (!$this->erro) {
-            $value = $this->checkLink($column, $value, $json);
-        }
-        if (!$this->erro) {
-            $this->checkNull($json[$column], $value, $column);
-        }
-        if (!$this->erro) {
-            $this->checkAllowValues($column, $value, $json);
-        }
-        if (!$this->erro) {
-            $this->checkType($column, $value, $json);
-        }
-        if (!$this->erro) {
-            $this->checkSize($column, $value, $json);
-        }
-        if (!$this->erro) {
-            $this->checkRegularExpressionValidate($json[$column], $value, $column);
-        }
-        if (!$this->erro) {
-            $this->checkUnique($column, $value, $json);
-        }
-        if (!$this->erro) {
-            $this->checkTagsFieldDefined($column, $value, $json);
-        }
-        if (!$this->erro) {
-            $this->checkFile($column, $value, $json);
-        }
+        $value = $this->checkDefault($this->entityJson[$column], $value);
+        $value = $this->checkLink($column, $value);
+        $this->checkNull($this->entityJson[$column], $value, $column);
+        $this->checkAllowValues($column, $value);
+        $this->checkType($column, $value);
+        $this->checkSize($column, $value);
+        $this->checkRegularExpressionValidate($this->entityJson[$column], $value, $column);
+        $this->checkUnique($column, $value, $update);
+        $this->checkTagsFieldDefined($column, $value);
+        $this->checkFile($column, $value);
+
         return $value;
     }
 
-    private function checkTagsFieldDefined($column, $value, $json)
+    private function checkTagsFieldDefined($column, $value)
     {
-        if ($this->haveTag("email", $json[$column]['tag'] ?? null)) {
+        if ($this->haveTag("email", $this->entityJson[$column]['tag'] ?? null)) {
             if (!Check::email($value)) {
                 $this->setErro("formato de email inválido", $column);
             }
 
-        } elseif ($this->haveTag("cpf", $json[$column]['tag'] ?? null)) {
+        } elseif ($this->haveTag("cpf", $this->entityJson[$column]['tag'] ?? null)) {
             if (!Check::cpf($value)) {
                 $this->setErro("formato de cpf inválido", $column);
             }
 
-        } elseif ($this->haveTag("cnpj", $json[$column]['tag'] ?? null)) {
+        } elseif ($this->haveTag("cnpj", $this->entityJson[$column]['tag'] ?? null)) {
             if (!Check::cnpj($value)) {
                 $this->setErro("formato de cnpj inválido", $column);
             }
@@ -161,9 +169,9 @@ abstract class EntityInsertData
         return false;
     }
 
-    private function checkFile($column, $value, $json)
+    private function checkFile($column, $value)
     {
-        if ($this->haveTag("cover", $json[$column]['tag'] ?? null)) {
+        if ($this->haveTag("cover", $this->entityJson[$column]['tag'] ?? null)) {
             //            $control = new ImageControl();
             //            $control->setTable($this->table);
             //            $control->setId($this->id);
@@ -174,54 +182,54 @@ abstract class EntityInsertData
         }
     }
 
-    private function checkSize($column, $value, $json)
+    private function checkSize($column, $value)
     {
-        if ($json[$column]['type'] === "varchar" && strlen($value) > $json[$column]['size']) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$json[$column]['size']}", $column);
-        } elseif ($json[$column]['type'] === "char" && strlen($value) > 1) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$json[$column]['size']}", $column);
-        } elseif ($json[$column]['type'] === "tinytext" && strlen($value) > 255) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$json[$column]['size']}", $column);
-        } elseif ($json[$column]['type'] === "text" && strlen($value) > 65535) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$json[$column]['size']}", $column);
-        } elseif ($json[$column]['type'] === "mediumtext" && strlen($value) > 16777215) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$json[$column]['size']}", $column);
-        } elseif ($json[$column]['type'] === "longtext" && strlen($value) > 4294967295) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$json[$column]['size']}", $column);
+        if ($this->entityJson[$column]['type'] === "varchar" && strlen($value) > $this->entityJson[$column]['size']) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
+        } elseif ($this->entityJson[$column]['type'] === "char" && strlen($value) > 1) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
+        } elseif ($this->entityJson[$column]['type'] === "tinytext" && strlen($value) > 255) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
+        } elseif ($this->entityJson[$column]['type'] === "text" && strlen($value) > 65535) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
+        } elseif ($this->entityJson[$column]['type'] === "mediumtext" && strlen($value) > 16777215) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
+        } elseif ($this->entityJson[$column]['type'] === "longtext" && strlen($value) > 4294967295) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
 
-        } elseif ($json[$column]['type'] === "tinyint") {
-            if ($value > (pow(2, ($json[$column]['size'] * 2)) - 1) || $value > (pow(2, 8) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($json[$column]['size'] * 2)) - 1), $column);
+        } elseif ($this->entityJson[$column]['type'] === "tinyint") {
+            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 8) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
             }
-        } elseif ($json[$column]['type'] === "smallint") {
-            if ($value > (pow(2, ($json[$column]['size'] * 2)) - 1) || $value > (pow(2, 16) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($json[$column]['size'] * 2)) - 1), $column);
+        } elseif ($this->entityJson[$column]['type'] === "smallint") {
+            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 16) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
             }
-        } elseif ($json[$column]['type'] === "mediumint") {
-            if ($value > (pow(2, ($json[$column]['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($json[$column]['size'] * 2)) - 1), $column);
+        } elseif ($this->entityJson[$column]['type'] === "mediumint") {
+            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
             }
-        } elseif ($json[$column]['type'] === "int") {
-            if ($value > (pow(2, ($json[$column]['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($json[$column]['size'] * 2)) - 1), $column);
+        } elseif ($this->entityJson[$column]['type'] === "int") {
+            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
             }
-        } elseif ($json[$column]['type'] === "bigint") {
-            if ($value > (pow(2, ($json[$column]['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($json[$column]['size'] * 2)) - 1), $column);
+        } elseif ($this->entityJson[$column]['type'] === "bigint") {
+            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
             }
         }
     }
 
-    private function checkType($column, $value, $json)
+    private function checkType($column, $value)
     {
         if (!empty($value)) {
-            if (in_array($json[$column]['type'], array("tinyint", "smallint", "mediumint", "int", "bigint"))) {
+            if (in_array($this->entityJson[$column]['type'], array("tinyint", "smallint", "mediumint", "int", "bigint"))) {
                 if (!is_numeric($value)) {
                     $this->setErro("valor numérico inválido.", $column);
                 }
 
-            } elseif ($json[$column]['type'] === "decimal") {
-                $size = (isset($json[$column]['size']) ? explode(',', str_replace(array('(', ')'), '', $json[$column]['size'])) : array(10, 30));
+            } elseif ($this->entityJson[$column]['type'] === "decimal") {
+                $size = (isset($this->entityJson[$column]['size']) ? explode(',', str_replace(array('(', ')'), '', $this->entityJson[$column]['size'])) : array(10, 30));
                 $val = explode('.', str_replace(',', '.', $value));
                 if (strlen($val[1]) > $size[1]) {
                     $this->setErro("valor das casas decimais excedido. Max {$size[1]}", $column);
@@ -229,56 +237,64 @@ abstract class EntityInsertData
                     $this->setErro("valor inteiro do valor decimal excedido. Max {$size[0]}", $column);
                 }
 
-            } elseif (in_array($json[$column]['type'], array("double", "real"))) {
+            } elseif (in_array($this->entityJson[$column]['type'], array("double", "real"))) {
                 if (!is_double($value)) {
                     $this->setErro("valor double não válido", $column);
                 }
 
-            } elseif ($json[$column]['type'] === "float") {
+            } elseif ($this->entityJson[$column]['type'] === "float") {
                 if (!is_float($value)) {
                     $this->setErro("valor flutuante não é válido", $column);
                 }
 
-            } elseif (in_array($json[$column]['type'], array("bit", "boolean", "serial"))) {
+            } elseif (in_array($this->entityJson[$column]['type'], array("bit", "boolean", "serial"))) {
                 if (!is_bool($value)) {
                     $this->setErro("valor boleano inválido. (true ou false)", $column);
                 }
-            } elseif (in_array($json[$column]['type'], array("datetime", "timestamp"))) {
+            } elseif (in_array($this->entityJson[$column]['type'], array("datetime", "timestamp"))) {
                 if (!preg_match('/\d{4}-\d{2}-\d{2}[T\s]+\d{2}:\d{2}/i', $value)):
                     $this->setErro("formato de data inválido ex válido:(2017-08-23 21:58:00)", $column);
                 endif;
 
-            } elseif ($json[$column]['type'] === "date") {
+            } elseif ($this->entityJson[$column]['type'] === "date") {
                 if (!preg_match('/\d{4}-\d{2}-\d{2}/i', $value)):
                     $this->setErro("formato de data inválido ex válido:(2017-08-23)", $column);
                 endif;
 
-            } elseif ($json[$column]['type'] === "time") {
+            } elseif ($this->entityJson[$column]['type'] === "time") {
                 if (!preg_match('/\d{2}:\d{2}/i', $value)):
                     $this->setErro("formato de tempo inválido ex válido:(21:58)", $column);
                 endif;
 
-            } elseif ($json[$column]['type'] === "json") {
+//            } elseif ($this->entityJson[$column]['type'] === "json") {
 
             }
         }
     }
 
-    private function checkUnique($column, $value, $json)
+    private function checkUnique($column, $value, $update = null)
     {
-        if (isset($json[$column]['key']) && $json[$column]['key'] === 'unique') {
-            $table = new TableCrud($this->table);
-            $table->load($column, $value);
-            if ($table->exist()) {
-                $this->setErro("campo precisa ser único", $column);
+        if (isset($this->entityJson[$column]['key']) && $this->entityJson[$column]['key'] === 'unique') {
+            if($update){
+                $read = new Read();
+                $read->exeRead($this->table, "WHERE {$column} = '{$value}' && {$update['column']} != {$update['value']}");
+                if($read->getResult()) {
+                    $this->setErro("campo precisa ser único", $column);
+                }
+            } else {
+                $read = new Read();
+                $read->exeRead($this->table, "WHERE {$column} = '{$value}'");
+                if($read->getResult()) {
+                    $this->setErro("campo precisa ser único", $column);
+                }
             }
         }
     }
 
-    private function checkAllowValues($column, $value, $json)
+    private function checkAllowValues($column, $value)
     {
-        if (isset($json[$column]['allow']) && !empty($value)) {
-            if (!in_array($value, $json[$column]['allow'])) {
+        if (isset($this->entityJson[$column]['allow']) && !empty($value)) {
+            if (!in_array($value, $this->entityJson[$column]['allow'])) {
                 $this->setErro("valor não permitido", $column);
             }
         }
@@ -312,10 +328,10 @@ abstract class EntityInsertData
         return $value;
     }
 
-    private function checkLink($column, $value, $json)
+    private function checkLink($column, $value)
     {
-        if (isset($json[$column]['link'])) {
-            return Check::name($this->entity[$this->table][$json[$column]['link']]);
+        if (isset($this->entityJson[$column]['link'])) {
+            return Check::name($this->entityDados[$this->table][$this->entityJson[$column]['link']]);
         }
 
         return $value;

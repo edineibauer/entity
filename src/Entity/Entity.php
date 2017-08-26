@@ -9,11 +9,12 @@
 namespace Entity;
 
 use Helpers\Check;
+use Helpers\Helper;
 
 class Entity extends EntityCreateStorage
 {
     private $entityName;
-    private $entity;
+    private $entityDados;
     private $title;
     private $erro;
 
@@ -25,70 +26,90 @@ class Entity extends EntityCreateStorage
     }
 
     /**
-     * @param mixed $entity
+     * @param mixed $entityName
      */
-    public function setEntity($entity)
+    public function setEntityName($entityName)
     {
-        if(strlen($entity) < 25) {
-            $this->loadEntityByFileName($entity);
-        }elseif(Check::json($entity)) {
-            $this->loadEntityByJsonString($entity);
+        $this->entityName = $entityName;
+    }
+
+    /**
+     * @param mixed $entityDados
+     */
+    public function setEntityDados($entityDados)
+    {
+        if(strlen($entityDados) < 25) {
+            $this->loadEntityByFileName($entityDados);
+        }elseif(Check::json($entityDados)) {
+            $this->loadEntityByJsonString($entityDados);
         } else {
-            $this->loadEntityByFileName($entity);
+            $this->loadEntityByFileName($entityDados);
         }
     }
 
     public function setDataEntity($entityData)
     {
         if(is_array($entityData)) {
-            $this->setEntityArray($entityData);
+            $this->setEntityArray($entityData, $this->entityDados);
         }elseif(Check::json($entityData)) {
-            $this->setEntityJson($entityData);
+            $this->setEntityArray(json_decode($entityData, true), $this->entityDados);
         }
     }
 
     /**
      * @return mixed
      */
-    public function getEntity()
+    public function getEntityDados()
     {
-        return $this->entity;
+        return $this->entityDados;
     }
 
     private function loadEntityByFileName($file)
     {
         if (file_exists(PATH_HOME . "sql/entities_worked/" . $file . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "sql/entities_worked/" . $file . '.json'), $file);
+            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "sql/entities_worked/" . $file . '.json'), $file, true);
 
         } elseif (file_exists(PATH_HOME . "sql/entities/" . $file . '.json')) {
             $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "sql/entities/" . $file . '.json'), $file);
 
         } else {
-            $this->erro = "os arquivos json para serem carregados devem ficar na pasta 'sql/entities/' caso estas pastas não existão no seu sistema, crie elas";
+            Helper::createFolderIfNoExist(PATH_HOME . "sql");
+            Helper::createFolderIfNoExist(PATH_HOME . "sql/entities");
+            $this->erro = "os arquivos json para serem carregados devem ficar na pasta 'sql/entities/'";
 
         }
     }
 
-    private function loadEntityByJsonString($json, $fileName = null)
+    private function loadEntityByJsonString($json, $fileName = null, $worked = false)
     {
-        if(!$fileName) {
+        if (isset($fileName) && !empty($fileName)) {
+            $this->setEntityName($fileName);
+        } else {
             foreach ($json as $table => $dados) {
-                $fileName = $table;
+                $this->setEntityName($table);
                 break;
             }
         }
-        if (isset($fileName) && !empty($fileName)) {
-            $this->entityName = $fileName;
-            $this->entity = $this->autoLoadInfo(json_decode($json, true));
+
+        if(!$this->entityName) {
+            $this->erro = "nome da entidade não encontrada";
+        }
+
+        if(!$worked && !$this->erro){
+            $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
             $this->createEntityWorked();
-            parent::createStorageEntity($this->entityName, $this->entity);
+            parent::createStorageEntity($this->entityName, $this->entityDados);
+        } else if(!$this->erro) {
+            parent::setTable($this->entityName);
+            $this->entityDados = json_decode($json, true);
         }
     }
 
     private function createEntityWorked()
     {
+        Helper::createFolderIfNoExist(PATH_HOME . "sql/entities_worked");
         $fp = fopen(PATH_HOME . "sql/entities_worked/" . $this->entityName . '.json', "w");
-        fwrite($fp, json_encode($this->entity));
+        fwrite($fp, json_encode($this->entityDados));
         fclose($fp);
     }
 
