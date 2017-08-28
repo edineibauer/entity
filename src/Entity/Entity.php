@@ -126,6 +126,18 @@ class Entity extends EntityCreateStorage
                     case 'link':
                         $data[$column] = $this->inputLink($data, $column);
                         break;
+                    case 'date':
+                        $data[$column] = $this->inputDate($data, $column);
+                        break;
+                    case 'datetime':
+                        $data[$column] = $this->inputDateTime($data, $column);
+                        break;
+                    case 'time':
+                        $data[$column] = $this->inputTime($data, $column);
+                        break;
+                    case 'week':
+                        $data[$column] = $this->inputWeek($data, $column);
+                        break;
                     case 'cover':
                         $data[$column] = $this->inputCover($data[$column]);
                         break;
@@ -149,6 +161,7 @@ class Entity extends EntityCreateStorage
         $field['key'] = "fk";
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
+        $field['input'] = "oneToOne";
 
         return $field;
     }
@@ -160,6 +173,7 @@ class Entity extends EntityCreateStorage
         $field['key'] = "fk";
         $field['key_delete'] = "no action";
         $field['key_update'] = "no action";
+        $field['input'] = "oneToMany";
 
         return $field;
     }
@@ -171,6 +185,7 @@ class Entity extends EntityCreateStorage
         $field['key'] = "fk";
         $field['key_delete'] = "no action";
         $field['key_update'] = "no action";
+        $field['input'] = "manyToMany";
 
         return $field;
     }
@@ -181,6 +196,7 @@ class Entity extends EntityCreateStorage
         $field['size'] = 11;
         $field['null'] = false;
         $field['key'] = "primary";
+        $field['input'] = "hidden";
 
         return $field;
     }
@@ -188,6 +204,7 @@ class Entity extends EntityCreateStorage
     private function inputText($field)
     {
         $field['type'] = "varchar";
+        $field['input'] = "text";
 
         return $field;
     }
@@ -195,6 +212,7 @@ class Entity extends EntityCreateStorage
     private function inputInt($field)
     {
         $field['size'] = $field['size'] ?? 11;
+        $field['input'] = "int";
 
         return $field;
     }
@@ -202,6 +220,7 @@ class Entity extends EntityCreateStorage
     private function inputTinyint($field)
     {
         $field['size'] = $field['size'] ?? 1;
+        $field['input'] = "int";
 
         return $field;
     }
@@ -215,6 +234,7 @@ class Entity extends EntityCreateStorage
         $field['class'] = "font-size20 font-bold";
         $field['tag'] = "title";
         $field['list'] = true;
+        $field['input'] = "text";
         $this->title = $column;
 
         return $field;
@@ -229,6 +249,35 @@ class Entity extends EntityCreateStorage
         $data[$field]['key'] = "unique";
         $data[$field]['class'] = "font-size08";
         $data[$field]['tag'] = "link";
+        $data[$field]['input'] = "link";
+
+        return $data[$field];
+    }
+
+    private function inputDate($data, $field)
+    {
+        $data[$field]['input'] = "date";
+
+        return $data[$field];
+    }
+
+    private function inputDateTime($data, $field)
+    {
+        $data[$field]['input'] = "datetime";
+
+        return $data[$field];
+    }
+
+    private function inputTime($data, $field)
+    {
+        $data[$field]['input'] = "time";
+
+        return $data[$field];
+    }
+
+    private function inputWeek($data, $field)
+    {
+        $data[$field]['input'] = "week";
 
         return $data[$field];
     }
