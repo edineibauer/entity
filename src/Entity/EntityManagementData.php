@@ -20,6 +20,7 @@ abstract class EntityManagementData
     private $entityDados;
     private $table;
     private $erro;
+    private $idData;
 
     public function deleteEntityData($id) {
         $del = new Delete();
@@ -35,6 +36,7 @@ abstract class EntityManagementData
         $this->entityDados = !isset($entity[$this->table]) ? array($this->table => $entity) : $entity;
         $this->entityJson = $entidadeFields;
         $this->insertEntity();
+        $this->showResponse();
     }
 
     /**
@@ -74,6 +76,7 @@ abstract class EntityManagementData
                     if (!$this->erro) {
                         $create->setDados($dados);
                         $create->save();
+                        $this->idData = $dados['id'];
                     } else {
                         var_dump($this->erro);
                     }
@@ -87,12 +90,21 @@ abstract class EntityManagementData
                 if (!$this->erro) {
                     $create = new TableCrud($table);
                     $create->loadArray($dados);
-                    $create->save();
+                    $this->idData = $create->save();
                 } else {
                     var_dump($this->erro);
                 }
 
             }
+        }
+    }
+
+    private function showResponse()
+    {
+        if($this->erro) {
+            echo json_encode(array("response" => 2, "mensagem" => "Uma ou mais informações precisam de alteração", "erros" => $this->getErroManagementData()));
+        } elseif($this->idData) {
+            echo json_encode(array("response" => 1, "id" => $this->idData, "mensagem" => "informações salvas com sucesso."));
         }
     }
 
