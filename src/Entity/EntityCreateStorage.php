@@ -11,27 +11,10 @@ namespace Entity;
 
 use ConnCrud\SqlCommand;
 
-abstract class EntityCreateStorage extends EntityInsertData
+abstract class EntityCreateStorage extends EntityManagementData
 {
     private $entityName;
     private $data;
-    private $erro;
-
-    /**
-     * @return mixed
-     */
-    public function getErro()
-    {
-        return $this->erro;
-    }
-
-    /**
-     * @return mixed
-     */
-    public function getEntityName()
-    {
-        return $this->entityName;
-    }
 
     protected function createStorageEntity($entityName, $data)
     {

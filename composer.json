@@ -1,0 +1,22 @@
+{
+  "name": "conn/entity",
+  "description": "Entidades de um sistema",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Edinei J. Bauer",
+      "email": "edineibauer@gmail.com"
+    }
+  ],
+  "require": {
+    "php": "^7.0",
+    "conn/conn-crud": "^1.1",
+    "conn/helpers": "^1"
+  },
+  "autoload": {
+    "psr-0": {
+      "Entity": "src/"
+    }
+  }
+}

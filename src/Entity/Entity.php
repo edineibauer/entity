@@ -18,48 +18,32 @@ class Entity extends EntityCreateStorage
     private $title;
     private $erro;
 
-    public function __construct($file = null)
+    public function __construct($file)
     {
-        if ($file) {
             $this->loadEntityByFileName($file);
-        }
     }
 
-    /**
-     * @param mixed $entityName
-     */
-    public function setEntityName($entityName)
+    public function insertDataEntity($arrayDataEntity)
     {
-        $this->entityName = $entityName;
-    }
-
-    /**
-     * @param mixed $entityDados
-     */
-    public function setEntityDados($entityDados)
-    {
-        if(strlen($entityDados) < 25) {
-            $this->loadEntityByFileName($entityDados);
-        }elseif(Check::json($entityDados)) {
-            $this->loadEntityByJsonString($entityDados);
-        } else {
-            $this->loadEntityByFileName($entityDados);
-        }
-    }
-
-    public function setDataEntity($entityData)
-    {
-        if(is_array($entityData)) {
-            $this->setEntityArray($entityData, $this->entityDados);
-        }elseif(Check::json($entityData)) {
-            $this->setEntityArray(json_decode($entityData, true), $this->entityDados);
+        if(is_array($arrayDataEntity)) {
+            $this->setEntityArray($arrayDataEntity, $this->entityDados);
+        }elseif(Check::json($arrayDataEntity)) {
+            $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
         }
     }
 
     /**
      * @return mixed
      */
-    public function getEntityDados()
+    public function getErroEntity()
+    {
+        return $this->erro;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getJsonStructEntity()
     {
         return $this->entityDados;
     }
@@ -83,10 +67,10 @@ class Entity extends EntityCreateStorage
     private function loadEntityByJsonString($json, $fileName = null, $worked = false)
     {
         if (isset($fileName) && !empty($fileName)) {
-            $this->setEntityName($fileName);
+            $this->entityName = $fileName;
         } else {
             foreach ($json as $table => $dados) {
-                $this->setEntityName($table);
+                $this->entityName = $table;
                 break;
             }
         }

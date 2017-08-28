@@ -9,16 +9,22 @@
 
 namespace Entity;
 
+use ConnCrud\Delete;
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
 use Helpers\Check;
 
-abstract class EntityInsertData
+abstract class EntityManagementData
 {
     private $entityJson;
     private $entityDados;
     private $table;
     private $erro;
+
+    public function deleteEntityData($id) {
+        $del = new Delete();
+        $del->exeDelete($this->table, "WHERE id = :id", "id={$id}");
+    }
 
     /**
      * @param array $entity
@@ -34,7 +40,7 @@ abstract class EntityInsertData
     /**
      * @param mixed $table
      */
-    public function setTable($table)
+    protected function setTable($table)
     {
         $this->table = $table;
     }
@@ -51,13 +57,9 @@ abstract class EntityInsertData
     /**
      * @return mixed
      */
-    public function getErro()
+    public function getErroManagementData()
     {
-        $erro = "";
-        foreach ($this->erro as $erro) {
-            $erro .= "<p style='float:left;padding:5px 10px'>{$erro}</p>";
-        }
-        return $erro;
+        return $this->erro;
     }
 
     private function insertEntity()
