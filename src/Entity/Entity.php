@@ -20,7 +20,7 @@ class Entity extends EntityCreateStorage
 
     public function __construct($file)
     {
-            $this->loadEntityByFileName($file);
+        $this->loadEntityByFileName($file);
     }
 
     public function insertDataEntity($arrayDataEntity)
@@ -147,11 +147,27 @@ class Entity extends EntityCreateStorage
                     case 'on':
                         $data[$column] = $this->inputOn($data[$column]);
                         break;
+                    case 'select':
+                        $data[$column] = $this->inputSelect($data[$column]);
+                        break;
                 }
+                $data[$column] = $this->checkTagsValuesDefault($data[$column], $column);
             }
         }
 
+
         return $data;
+    }
+
+    private function checkTagsValuesDefault($field, $column)
+    {
+        $field['column'] = $column;
+        $field['title'] = $this->prepareColumnName($column);
+        $field['class'] = $field['class'] ?? "";
+        $field['row'] = $field['row'] ?? "row";
+        $field['null'] = $field['null'] ?? true;
+
+        return $field;
     }
 
     private function oneToOne($field)
@@ -304,5 +320,18 @@ class Entity extends EntityCreateStorage
         $field['default'] = 0;
 
         return $field;
+    }
+
+    private function inputSelect($field)
+    {
+        $field['type'] = 'int';
+        $field['input'] = "select";
+
+        return $field;
+    }
+
+    private function prepareColumnName($column)
+    {
+        return trim(ucwords(str_replace(array('_', '-'), ' ', $column)));
     }
 }
