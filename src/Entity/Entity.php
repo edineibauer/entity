@@ -16,6 +16,8 @@ class Entity extends EntityCreateStorage
     private $entityName;
     private $entityDados;
     private $title;
+    private $primary;
+    private $image;
     private $erro;
 
     public function __construct($file)
@@ -25,9 +27,9 @@ class Entity extends EntityCreateStorage
 
     public function insertDataEntity($arrayDataEntity)
     {
-        if(is_array($arrayDataEntity)) {
+        if (is_array($arrayDataEntity)) {
             $this->setEntityArray($arrayDataEntity, $this->entityDados);
-        }elseif(Check::json($arrayDataEntity)) {
+        } elseif (Check::json($arrayDataEntity)) {
             $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
         }
     }
@@ -41,11 +43,19 @@ class Entity extends EntityCreateStorage
     }
 
     /**
-     * @return mixed
+     * @return array
      */
     public function getJsonStructEntity()
     {
         return $this->entityDados;
+    }
+
+    /**
+     * @return array
+     */
+    public function getJsonInfoEntity()
+    {
+        return json_decode(file_get_contents(PATH_HOME . "sql/entities_worked/" . $this->entityName . '_info.json'), true);
     }
 
     private function loadEntityByFileName($file)
@@ -75,25 +85,25 @@ class Entity extends EntityCreateStorage
             }
         }
 
-        if(!$this->entityName) {
+        if (!$this->entityName) {
             $this->erro = "nome da entidade não encontrada";
         }
 
-        if(!$worked && !$this->erro){
+        if (!$worked && !$this->erro) {
             $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
-            $this->createEntityWorked();
+            $this->createEntityWorked($this->entityName, $this->entityDados);
             parent::createStorageEntity($this->entityName, $this->entityDados);
-        } else if(!$this->erro) {
+        } else if (!$this->erro) {
             parent::setTable($this->entityName);
             $this->entityDados = json_decode($json, true);
         }
     }
 
-    private function createEntityWorked()
+    private function createEntityWorked(string $nome, array $data)
     {
         Helper::createFolderIfNoExist(PATH_HOME . "sql/entities_worked");
-        $fp = fopen(PATH_HOME . "sql/entities_worked/" . $this->entityName . '.json', "w");
-        fwrite($fp, json_encode($this->entityDados));
+        $fp = fopen(PATH_HOME . "sql/entities_worked/" . $nome . '.json', "w");
+        fwrite($fp, json_encode($data));
         fclose($fp);
     }
 
@@ -103,7 +113,7 @@ class Entity extends EntityCreateStorage
             foreach ($data as $column => $dados) {
                 switch ($dados['type']) {
                     case '1-1':
-                        $data[$column] = $this->oneToOne($data[$column]);
+                        $data[$column] = $this->oneToOne($data[$column], $column);
                         break;
                     case '1-n':
                         $data[$column] = $this->oneToMany($data[$column]);
@@ -112,7 +122,7 @@ class Entity extends EntityCreateStorage
                         $data[$column] = $this->manyToMany($data[$column]);
                         break;
                     case 'pri':
-                        $data[$column] = $this->inputPrimary($data[$column]);
+                        $data[$column] = $this->inputPrimary($data[$column], $column);
                         break;
                     case 'int':
                         $data[$column] = $this->inputInt($data[$column]);
@@ -153,6 +163,13 @@ class Entity extends EntityCreateStorage
                 }
                 $data[$column] = $this->checkTagsValuesDefault($data[$column], $column);
             }
+
+            $dataInfo = array(
+                "title" => $this->title ?? null,
+                "primary" => $this->primary ?? null,
+                "image" => $this->image ?? null
+            );
+            $this->createEntityWorked($this->entityName . "_info", $dataInfo);
         }
 
 
@@ -166,11 +183,12 @@ class Entity extends EntityCreateStorage
         $field['class'] = $field['class'] ?? "";
         $field['row'] = $field['row'] ?? "row";
         $field['null'] = $field['null'] ?? true;
+        $field['key'] = $field['key'] ?? "";
 
         return $field;
     }
 
-    private function oneToOne($field)
+    private function oneToOne($field, $column)
     {
         $field['type'] = "int";
         $field['size'] = 11;
@@ -178,6 +196,10 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "oneToOne";
+
+        if (isset($field['tag']) && ((is_array($field['tag']) && in_array("image", $field['tag'])) || $field['tag'] === "image")) {
+            $this->image = $column;
+        }
 
         return $field;
     }
@@ -206,13 +228,14 @@ class Entity extends EntityCreateStorage
         return $field;
     }
 
-    private function inputPrimary($field)
+    private function inputPrimary($field, $column)
     {
         $field['type'] = "int";
         $field['size'] = 11;
         $field['null'] = false;
         $field['key'] = "primary";
         $field['input'] = "hidden";
+        $this->primary = $column;
 
         return $field;
     }
