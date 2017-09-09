@@ -358,7 +358,7 @@ class Entity extends EntityCreateStorage
     private function inputPassword($field)
     {
         $field['type'] = 'varchar';
-        $field['size'] = 127;
+        $field['size'] = $field['size'] ?? 255;
         $field['null'] = false;
         $field['input'] = "password";
 
