@@ -151,6 +151,15 @@ class Entity extends EntityCreateStorage
                     case 'cover':
                         $data[$column] = $this->inputCover($data[$column]);
                         break;
+                    case 'email':
+                        $data[$column] = $this->inputEmail($data[$column]);
+                        break;
+                    case 'password':
+                        $data[$column] = $this->inputPassword($data[$column]);
+                        break;
+                    case 'status':
+                        $data[$column] = $this->inputStatus($data[$column]);
+                        break;
                     case 'text':
                         $data[$column] = $this->inputText($data[$column]);
                         break;
@@ -321,6 +330,27 @@ class Entity extends EntityCreateStorage
         return $data[$field];
     }
 
+    private function inputEmail($field)
+    {
+        $field['type'] = 'varchar';
+        $field['size'] = 127;
+        $field['key'] = "unique";
+        $field['input'] = "email";
+        $field['validade'] = "email";
+
+        return $field;
+    }
+
+    private function inputPassword($field)
+    {
+        $field['type'] = 'varchar';
+        $field['size'] = 127;
+        $field['null'] = false;
+        $field['input'] = "password";
+
+        return $field;
+    }
+
     private function inputCover($field)
     {
         $field['type'] = 'varchar';
@@ -329,6 +359,19 @@ class Entity extends EntityCreateStorage
         $field['key'] = "unique";
         $field['input'] = "image";
         $field['list'] = $field['list'] ?? true;
+
+        return $field;
+    }
+
+    private function inputStatus($field)
+    {
+        $field['type'] = 'tinyint';
+        $field['size'] = 1;
+        $field['null'] = false;
+        $field['allow'] = [0, 1];
+        $field["relation"] = [0 => "desativado", 1 => "ativo"];
+        $field['input'] = "on";
+        $field['default'] = $field['default'] ?? 0;
 
         return $field;
     }

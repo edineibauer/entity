@@ -22,7 +22,8 @@ abstract class EntityManagementData
     private $erro;
     private $idData;
 
-    public function deleteEntityData($id) {
+    public function deleteEntityData($id)
+    {
         $del = new Delete();
         $del->exeDelete($this->table, "WHERE id = :id", "id={$id}");
     }
@@ -101,9 +102,9 @@ abstract class EntityManagementData
 
     private function showResponse()
     {
-        if($this->erro) {
+        if ($this->erro) {
             echo json_encode(array("response" => 2, "mensagem" => "Uma ou mais informações precisam de alteração", "erros" => $this->getErroManagementData()));
-        } elseif($this->idData) {
+        } elseif ($this->idData) {
             echo json_encode(array("response" => 1, "id" => $this->idData, "mensagem" => "informações salvas com sucesso."));
         }
     }
@@ -113,9 +114,9 @@ abstract class EntityManagementData
         $update = null;
         $newdados = array();
         foreach ($this->entityJson as $column => $fields) {
-            if(!$this->erro) {
+            if (!$this->erro) {
                 if (!isset($this->entityJson[$column]['key']) || $this->entityJson[$column]['key'] !== "primary") {
-                    if(!$update || $this->checkIsUpdated($column)) {
+                    if (!$update || $this->checkIsUpdated($column)) {
                         $newdados[$column] = $this->checkValue($column, $update, $dados[$column] ?? null);
                     }
                     if ($this->erro) {
@@ -147,6 +148,7 @@ abstract class EntityManagementData
         $this->checkAllowValues($column, $value);
         $this->checkType($column, $value);
         $this->checkSize($column, $value);
+        $this->checkValidate($this->entityJson[$column], $value, $column);
         $this->checkRegularExpressionValidate($this->entityJson[$column], $value, $column);
         $this->checkUnique($column, $value, $update);
         $this->checkTagsFieldDefined($column, $value);
@@ -280,7 +282,7 @@ abstract class EntityManagementData
                     $this->setErro("formato de tempo inválido ex válido:(21:58)", $column);
                 endif;
 
-//            } elseif ($this->entityJson[$column]['type'] === "json") {
+                //            } elseif ($this->entityJson[$column]['type'] === "json") {
 
             }
         }
@@ -289,16 +291,16 @@ abstract class EntityManagementData
     private function checkUnique($column, $value, $update = null)
     {
         if (isset($this->entityJson[$column]['key']) && $this->entityJson[$column]['key'] === 'unique') {
-            if($update){
+            if ($update) {
                 $read = new Read();
                 $read->exeRead($this->table, "WHERE {$column} = '{$value}' && {$update['column']} != {$update['value']}");
-                if($read->getResult()) {
+                if ($read->getResult()) {
                     $this->setErro("campo precisa ser único", $column);
                 }
             } else {
                 $read = new Read();
                 $read->exeRead($this->table, "WHERE {$column} = '{$value}'");
-                if($read->getResult()) {
+                if ($read->getResult()) {
                     $this->setErro("campo precisa ser único", $column);
                 }
             }
@@ -349,6 +351,30 @@ abstract class EntityManagementData
         }
 
         return $value;
+    }
+
+    private function checkValidate($field, $value, $column)
+    {
+        if (isset($field['validade']) && !empty($value)):
+            if (is_array($field['validade'])) {
+                foreach ($field['validade'] as $reg):
+                    $this->valida($reg, $value, $column);
+                endforeach;
+            } else {
+                $this->valida($field['validade'], $value, $column);
+            }
+        endif;
+    }
+
+    private function valida($key, $value, $column)
+    {
+        switch ($key) {
+            case "email" :
+                if (!\Helpers\Check::email($value)):
+                    $this->setErro("formato de email incorreto", $column);
+                endif;
+                break;
+        }
     }
 
     private function checkRegularExpressionValidate($field, $value, $column)
