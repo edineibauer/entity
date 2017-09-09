@@ -349,7 +349,6 @@ class Entity extends EntityCreateStorage
     {
         $field['type'] = 'varchar';
         $field['size'] = 127;
-        $field['key'] = "unique";
         $field['input'] = "email";
         $field['validade'] = "email";
 
