@@ -27,7 +27,12 @@ class Entity extends EntityCreateStorage
         if($library) {
             $this->setLibrary($library);
         } else {
-            $this->library = "entity";
+            foreach (Helper::listFolder(PATH_HOME . "vendor/conn") as $folder) {
+                if(file_exists(PATH_HOME . "vendor/conn/{$folder}/entity/{$this->entityName}.json")) {
+                    $this->setLibrary($folder);
+                    break;
+                }
+            }
         }
     }
 
