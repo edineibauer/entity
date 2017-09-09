@@ -13,6 +13,7 @@ use Helpers\Helper;
 
 class Entity extends EntityCreateStorage
 {
+    private $library;
     private $entityName;
     private $entityDados;
     private $title;
@@ -20,17 +21,35 @@ class Entity extends EntityCreateStorage
     private $image;
     private $erro;
 
-    public function __construct($file)
+    public function __construct($entity, $library = null)
     {
-        $this->loadEntityByFileName($file);
+        $this->entityName = $entity;
+        if($library) {
+            $this->setLibrary($library);
+        } else {
+            $this->library = "entity";
+        }
+    }
+
+    /**
+     * @param string $library
+     */
+    public function setLibrary(string $library)
+    {
+        $this->library = $library;
+        $this->loadStart();
     }
 
     public function insertDataEntity($arrayDataEntity)
     {
-        if (is_array($arrayDataEntity)) {
-            $this->setEntityArray($arrayDataEntity, $this->entityDados);
-        } elseif (Check::json($arrayDataEntity)) {
-            $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
+        if ($this->library) {
+            if (is_array($arrayDataEntity)) {
+                $this->setEntityArray($arrayDataEntity, $this->entityDados);
+            } elseif (Check::json($arrayDataEntity)) {
+                $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
+            }
+        } else {
+            $this->erro = "Informe a biblioteca destino desta entidade";
         }
     }
 
@@ -55,45 +74,38 @@ class Entity extends EntityCreateStorage
      */
     public function getJsonInfoEntity()
     {
-        return json_decode(file_get_contents(PATH_HOME . "sql/entities_worked/" . $this->entityName . '_info.json'), true);
-    }
-
-    private function loadEntityByFileName($file)
-    {
-        if (file_exists(PATH_HOME . "sql/entities_worked/" . $file . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "sql/entities_worked/" . $file . '.json'), $file, true);
-
-        } elseif (file_exists(PATH_HOME . "sql/entities/" . $file . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "sql/entities/" . $file . '.json'), $file);
-
+        if ($this->library) {
+            return json_decode(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '_info.json'), true);
         } else {
-            Helper::createFolderIfNoExist(PATH_HOME . "sql");
-            Helper::createFolderIfNoExist(PATH_HOME . "sql/entities");
-            $this->erro = "os arquivos json para serem carregados devem ficar na pasta 'sql/entities/'";
-
+            $this->erro = "Informe a biblioteca destino desta entidade";
         }
     }
 
-    private function loadEntityByJsonString($json, $fileName = null, $worked = false)
+    private function loadStart()
     {
-        if (isset($fileName) && !empty($fileName)) {
-            $this->entityName = $fileName;
+        if (file_exists(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '.json')) {
+            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '.json'), true);
+
+        } elseif (file_exists(PATH_HOME . "vendor/conn/{$this->library}/entity/" . $this->entityName . '.json')) {
+            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/" . $this->entityName . '.json'));
+
         } else {
-            foreach ($json as $table => $dados) {
-                $this->entityName = $table;
-                break;
-            }
-        }
+            Helper::createFolderIfNoExist(PATH_HOME . "vendor/conn/{$this->library}/entity");
+            $this->erro = "os arquivos json para serem carregados devem ficar na pasta 'vendor/conn/{$this->library}/entity/'";
 
-        if (!$this->entityName) {
-            $this->erro = "nome da entidade não encontrada";
         }
+    }
 
+    private function loadEntityByJsonString($json, $worked = false)
+    {
         if (!$worked && !$this->erro) {
+
             $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
             $this->createEntityWorked($this->entityName, $this->entityDados);
             parent::createStorageEntity($this->entityName, $this->entityDados);
+
         } else if (!$this->erro) {
+
             parent::setTable($this->entityName);
             $this->entityDados = json_decode($json, true);
         }
@@ -101,8 +113,8 @@ class Entity extends EntityCreateStorage
 
     private function createEntityWorked(string $nome, array $data)
     {
-        Helper::createFolderIfNoExist(PATH_HOME . "sql/entities_worked");
-        $fp = fopen(PATH_HOME . "sql/entities_worked/" . $nome . '.json', "w");
+        Helper::createFolderIfNoExist(PATH_HOME . "vendor/conn/{$this->library}/entity/cache");
+        $fp = fopen(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $nome . '.json', "w");
         fwrite($fp, json_encode($data));
         fclose($fp);
     }
@@ -305,7 +317,7 @@ class Entity extends EntityCreateStorage
     private function inputDate($data, $field)
     {
         $data[$field]['input'] = "date";
-        $data[$field]['default'] =  $data[$field]['default'] ?? "date";
+        $data[$field]['default'] = $data[$field]['default'] ?? "date";
 
         return $data[$field];
     }
