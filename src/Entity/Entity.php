@@ -72,13 +72,15 @@ class Entity extends EntityCreateStorage
     /**
      * @return array
      */
-    public function getJsonInfoEntity()
+    public function getJsonInfoEntity() :array
     {
         if ($this->library) {
             return json_decode(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '_info.json'), true);
         } else {
             $this->erro = "Informe a biblioteca destino desta entidade";
         }
+
+        return array();
     }
 
     private function loadStart()
@@ -116,6 +118,22 @@ class Entity extends EntityCreateStorage
         Helper::createFolderIfNoExist(PATH_HOME . "vendor/conn/{$this->library}/entity/cache");
         $fp = fopen(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $nome . '.json', "w");
         fwrite($fp, json_encode($data));
+        fclose($fp);
+
+        $this->createRouteLibrary($nome);
+    }
+
+    private function createRouteLibrary($nome)
+    {
+        Helper::createFolderIfNoExist(PATH_HOME . "entityRoute");
+        if(!file_exists(PATH_HOME . "entityRoute/entityRoute.json")) {
+            $dados = "{";
+        } else {
+            $dados = substr(file_get_contents(PATH_HOME . "entityRoute/entityRoute.json"),0,-1) . ", ";
+        }
+
+        $fp = fopen(PATH_HOME . "entityRoute/entityRoute.json", "w");
+        fwrite($fp, $dados . "'{$nome}': '{$this->library}'}");
         fclose($fp);
     }
 
