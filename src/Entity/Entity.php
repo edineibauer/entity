@@ -27,10 +27,20 @@ class Entity extends EntityCreateStorage
         if($library) {
             $this->setLibrary($library);
         } else {
-            foreach (Helper::listFolder(PATH_HOME . "vendor/conn") as $folder) {
-                if(file_exists(PATH_HOME . "vendor/conn/{$folder}/entity/{$this->entityName}.json")) {
-                    $this->setLibrary($folder);
-                    break;
+            $find = false;
+            if(file_exists(PATH_HOME . "routeEntity/routeEntity.json")) {
+                $route = json_decode(file_get_contents(PATH_HOME . "routeEntity/routeEntity.json"), true);
+                if (isset($route[$this->entityName])) {
+                    $find = true;
+                    $this->setLibrary($route[$this->entityName]);
+                }
+            }
+            if(!$find) {
+                foreach (Helper::listFolder(PATH_HOME . "vendor/conn") as $folder) {
+                    if(file_exists(PATH_HOME . "vendor/conn/{$folder}/entity/{$this->entityName}.json")) {
+                        $this->setLibrary($folder);
+                        break;
+                    }
                 }
             }
         }
@@ -130,14 +140,14 @@ class Entity extends EntityCreateStorage
 
     private function createRouteLibrary($nome)
     {
-        Helper::createFolderIfNoExist(PATH_HOME . "entityRoute");
-        if(!file_exists(PATH_HOME . "entityRoute/entityRoute.json")) {
+        Helper::createFolderIfNoExist(PATH_HOME . "routeEntity");
+        if(!file_exists(PATH_HOME . "routeEntity/routeEntity.json")) {
             $dados = "{";
         } else {
-            $dados = substr(file_get_contents(PATH_HOME . "entityRoute/entityRoute.json"),0,-1) . ", ";
+            $dados = substr(file_get_contents(PATH_HOME . "routeEntity/routeEntity.json"),0,-1) . ", ";
         }
 
-        $fp = fopen(PATH_HOME . "entityRoute/entityRoute.json", "w");
+        $fp = fopen(PATH_HOME . "routeEntity/routeEntity.json", "w");
         fwrite($fp, $dados . "'{$nome}': '{$this->library}'}");
         fclose($fp);
     }
