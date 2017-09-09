@@ -148,7 +148,7 @@ class Entity extends EntityCreateStorage
         }
 
         $fp = fopen(PATH_HOME . "routeEntity/routeEntity.json", "w");
-        fwrite($fp, $dados . "'{$nome}': '{$this->library}'}");
+        fwrite($fp, $dados . "\"{$nome}\": \"{$this->library}\"}");
         fclose($fp);
     }
 
