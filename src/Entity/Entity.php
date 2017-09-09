@@ -305,6 +305,7 @@ class Entity extends EntityCreateStorage
     private function inputDate($data, $field)
     {
         $data[$field]['input'] = "date";
+        $data[$field]['default'] =  $data[$field]['default'] ?? "date";
 
         return $data[$field];
     }
@@ -312,6 +313,7 @@ class Entity extends EntityCreateStorage
     private function inputDateTime($data, $field)
     {
         $data[$field]['input'] = "datetime";
+        $data[$field]['default'] = $data[$field]['default'] ?? "datetime";
 
         return $data[$field];
     }
@@ -319,6 +321,7 @@ class Entity extends EntityCreateStorage
     private function inputTime($data, $field)
     {
         $data[$field]['input'] = "time";
+        $data[$field]['default'] = $data[$field]['default'] ?? "time";
 
         return $data[$field];
     }
