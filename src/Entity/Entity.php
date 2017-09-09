@@ -140,14 +140,14 @@ class Entity extends EntityCreateStorage
 
     private function createRouteLibrary($nome)
     {
-        Helper::createFolderIfNoExist(PATH_HOME . "routeEntity");
-        if(!file_exists(PATH_HOME . "routeEntity/routeEntity.json")) {
+        Helper::createFolderIfNoExist(PATH_HOME . "routes");
+        if(!file_exists(PATH_HOME . "routes/routeEntity.json")) {
             $dados = "{";
         } else {
-            $dados = substr(file_get_contents(PATH_HOME . "routeEntity/routeEntity.json"),0,-1) . ", ";
+            $dados = substr(file_get_contents(PATH_HOME . "routes/routeEntity.json"),0,-1) . ", ";
         }
 
-        $fp = fopen(PATH_HOME . "routeEntity/routeEntity.json", "w");
+        $fp = fopen(PATH_HOME . "routes/routeEntity.json", "w");
         fwrite($fp, $dados . "\"{$nome}\": \"{$this->library}\"}");
         fclose($fp);
     }
