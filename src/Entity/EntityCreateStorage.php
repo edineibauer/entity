@@ -13,12 +13,14 @@ use ConnCrud\SqlCommand;
 
 abstract class EntityCreateStorage extends EntityManagementData
 {
+    private $library;
     private $entityName;
     private $data;
 
-    protected function createStorageEntity($entityName, $data)
+    protected function createStorageEntity($entityName, $library, $data)
     {
         $this->entityName = $entityName;
+        $this->library = $library;
         parent::setTable($this->entityName);
         $this->data = $data;
 
@@ -81,7 +83,7 @@ abstract class EntityCreateStorage extends EntityManagementData
             case "fk":
                 if (isset($dados['key_delete']) && isset($dados['key_update']) && isset($dados['table'])) {
                     if (!$this->existEntityStorage($dados['table'])) {
-                        new Entity($dados['table']);
+                        new Entity($dados['table'], $this->library);
                     }
 
                     $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `{$column}` (`{$column}`)");

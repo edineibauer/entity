@@ -101,8 +101,8 @@ class Entity extends EntityCreateStorage
         if (!$worked && !$this->erro) {
 
             $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
-            $this->createEntityWorked($this->entityName, $this->entityDados);
-            parent::createStorageEntity($this->entityName, $this->entityDados);
+            $this->createCache($this->entityName, $this->entityDados);
+            parent::createStorageEntity($this->entityName, $this->library, $this->entityDados);
 
         } else if (!$this->erro) {
 
@@ -111,7 +111,7 @@ class Entity extends EntityCreateStorage
         }
     }
 
-    private function createEntityWorked(string $nome, array $data)
+    private function createCache(string $nome, array $data)
     {
         Helper::createFolderIfNoExist(PATH_HOME . "vendor/conn/{$this->library}/entity/cache");
         $fp = fopen(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $nome . '.json', "w");
@@ -190,7 +190,7 @@ class Entity extends EntityCreateStorage
                 "primary" => $this->primary ?? null,
                 "image" => $this->image ?? null
             );
-            $this->createEntityWorked($this->entityName . "_info", $dataInfo);
+            $this->createCache($this->entityName . "_info", $dataInfo);
         }
 
 
