@@ -78,7 +78,7 @@ abstract class EntityCreateStorage extends EntityManagementData
                                     new Entity($dados['table'], $this->library);
                                 }
 
-                                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `{$column}` (`{$column}`)");
+                                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `fk_{$column}` (`{$column}`)");
                                 $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $this->entityName) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($dados['table']) . "` (`id`) ON DELETE " . strtoupper($dados['key_delete']) . " ON UPDATE " . strtoupper($dados['key_update']));
                             }
                             break;
