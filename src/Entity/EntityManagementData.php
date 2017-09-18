@@ -290,7 +290,7 @@ abstract class EntityManagementData
 
     private function checkUnique($column, $value, $update = null)
     {
-        if (isset($this->entityJson[$column]['key']) && $this->entityJson[$column]['key'] === 'unique') {
+        if ($this->entityJson[$column]['unique']) {
             if ($update) {
                 $read = new Read();
                 $read->exeRead($this->table, "WHERE {$column} = '{$value}' && {$update['column']} != {$update['value']}");

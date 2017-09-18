@@ -250,7 +250,6 @@ class Entity extends EntityCreateStorage
         $field['column'] = $column;
         $field['title'] = $this->prepareColumnName($column);
         $field['class'] = $field['class'] ?? "";
-        $field['row'] = $field['row'] ?? "row";
         $field['null'] = $field['null'] ?? true;
         $field['edit'] = $field['edit'] ?? true;
         $field['list'] = $field['list'] ?? true;
@@ -262,7 +261,7 @@ class Entity extends EntityCreateStorage
         $field["allowRelation"] = $field["allowRelation"] ?? "";
         $field["default"] = $field["default"] ?? "";
         $field["table"] = $field["table"] ?? "";
-        $field["col"] = $field["col"] ?? "";
+        $field["col"] = $field["col"] ?? "row";
         $field["class"] = $field["class"] ?? "";
         $field["style"] = $field["style"] ?? "";
         $field["regular"] = $field["regular"] ?? "";

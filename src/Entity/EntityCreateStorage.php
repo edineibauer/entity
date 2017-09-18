@@ -58,40 +58,33 @@ abstract class EntityCreateStorage extends EntityManagementData
     private function createKeys()
     {
         if ($this->data && is_array($this->data)) {
+            $sql = new SqlCommand();
             foreach ($this->data as $column => $dados) {
-                if (isset($dados['key'])) {
-                    if (is_array($dados['key'])) {
-                        foreach ($dados['key'] as $key) {
-                            $this->checkKeyCreate($key, $column, $dados);
-                        }
-                    } else {
-                        $this->checkKeyCreate($dados['key'], $column, $dados);
+                if($dados['unique']) {
+                    $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD UNIQUE KEY `{$column}` (`{$column}`)");
+                }
+                if($dados['indice']) {
+                    $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD KEY `{$column}` (`{$column}`)");
+                }
+
+                if(!empty($dados['key'])) {
+                    switch ($dados['key']) {
+                        case "primary":
+                            $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
+                            break;
+                        case "fk":
+                            if (isset($dados['key_delete']) && isset($dados['key_update']) && isset($dados['table'])) {
+                                if (!$this->existEntityStorage($dados['table'])) {
+                                    new Entity($dados['table'], $this->library);
+                                }
+
+                                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `{$column}` (`{$column}`)");
+                                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $this->entityName) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($dados['table']) . "` (`id`) ON DELETE " . strtoupper($dados['key_delete']) . " ON UPDATE " . strtoupper($dados['key_update']));
+                            }
+                            break;
                     }
                 }
             }
-        }
-    }
-
-    private function checkKeyCreate($key, $column, $dados)
-    {
-        switch ($key) {
-            case "primary":
-                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
-                break;
-            case "unique":
-                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD UNIQUE KEY `{$column}` (`{$column}`)");
-            case "fk":
-                if (isset($dados['key_delete']) && isset($dados['key_update']) && isset($dados['table'])) {
-                    if (!$this->existEntityStorage($dados['table'])) {
-                        new Entity($dados['table'], $this->library);
-                    }
-
-                    $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `{$column}` (`{$column}`)");
-                    $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $this->entityName) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($dados['table']) . "` (`id`) ON DELETE " . strtoupper($dados['key_delete']) . " ON UPDATE " . strtoupper($dados['key_update']));
-                }
-                break;
-            case "indice":
-                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `{$column}` (`{$column}`)");
         }
     }
 
