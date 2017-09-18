@@ -158,15 +158,30 @@ class Entity extends EntityCreateStorage
             foreach ($data as $column => $dados) {
                 switch ($dados['type']) {
                     case '1-1':
-                        $data[$column] = $this->oneToOne($data[$column], $column);
+                        $data[$column] = $this->list($data[$column], $column);
                         break;
                     case '1-n':
-                        $data[$column] = $this->oneToMany($data[$column]);
+                        $data[$column] = $this->extendMultiple($data[$column]);
                         break;
                     case 'n-n':
-                        $data[$column] = $this->manyToMany($data[$column]);
+                        $data[$column] = $this->listMultiple($data[$column]);
+                        break;
+                    case 'extend':
+                        $data[$column] = $this->extend($data[$column]);
+                        break;
+                    case 'extend_multiple':
+                        $data[$column] = $this->extendMultiple($data[$column]);
+                        break;
+                    case 'list':
+                        $data[$column] = $this->list($data[$column], $column);
+                        break;
+                    case 'list_multiple':
+                        $data[$column] = $this->listMultiple($data[$column]);
                         break;
                     case 'pri':
+                        $data[$column] = $this->inputPrimary($data[$column], $column);
+                        break;
+                    case 'primary':
                         $data[$column] = $this->inputPrimary($data[$column], $column);
                         break;
                     case 'int':
@@ -237,19 +252,48 @@ class Entity extends EntityCreateStorage
         $field['class'] = $field['class'] ?? "";
         $field['row'] = $field['row'] ?? "row";
         $field['null'] = $field['null'] ?? true;
+        $field['edit'] = $field['edit'] ?? true;
+        $field['list'] = $field['list'] ?? true;
+        $field['update'] = $field['update'] ?? true;
+        $field['unique'] = $field['unique'] ?? false;
+        $field['indice'] = $field['indice'] ?? false;
+        $field["size"] = $field["size"] ?? "";
+        $field["allow"] = $field["allow"] ?? "";
+        $field["allowRelation"] = $field["allowRelation"] ?? "";
+        $field["default"] = $field["default"] ?? "";
+        $field["table"] = $field["table"] ?? "";
+        $field["col"] = $field["col"] ?? "";
+        $field["class"] = $field["class"] ?? "";
+        $field["style"] = $field["style"] ?? "";
+        $field["regular"] = $field["regular"] ?? "";
+        $field["prefixo"] = $field["prefixo"] ?? "";
+        $field["sulfixo"] = $field["sulfixo"] ?? "";
         $field['key'] = $field['key'] ?? "";
 
         return $field;
     }
 
-    private function oneToOne($field, $column)
+    private function extend($field)
     {
         $field['type'] = "int";
         $field['size'] = 11;
-        $field['key'] = "fk";
+        $field['key'] = "extend";
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
-        $field['input'] = "oneToOne";
+        $field['input'] = "extend";
+        $field['null'] = false;
+
+        return $field;
+    }
+
+    private function list($field, $column)
+    {
+        $field['type'] = "int";
+        $field['size'] = 11;
+        $field['key'] = "list";
+        $field['key_delete'] = "no action";
+        $field['key_update'] = "no action";
+        $field['input'] = "list";
 
         if (isset($field['tag']) && ((is_array($field['tag']) && in_array("image", $field['tag'])) || $field['tag'] === "image")) {
             $this->image = $column;
@@ -258,26 +302,26 @@ class Entity extends EntityCreateStorage
         return $field;
     }
 
-    private function oneToMany($field)
+    private function extendMultiple($field)
     {
         $field['type'] = "int";
         $field['size'] = 11;
-        $field['key'] = "fk";
-        $field['key_delete'] = "no action";
+        $field['key'] = "extend_mult";
+        $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
-        $field['input'] = "oneToMany";
+        $field['input'] = "extend_mult";
 
         return $field;
     }
 
-    private function manyToMany($field)
+    private function listMultiple($field)
     {
         $field['type'] = "int";
         $field['size'] = 11;
-        $field['key'] = "fk";
+        $field['key'] = "list_mult";
         $field['key_delete'] = "no action";
         $field['key_update'] = "no action";
-        $field['input'] = "manyToMany";
+        $field['input'] = "list_mult";
 
         return $field;
     }
@@ -323,7 +367,7 @@ class Entity extends EntityCreateStorage
         $field['type'] = "varchar";
         $field['size'] = $field['size'] ?? 127;
         $field['null'] = false;
-        $field['key'] = "unique";
+        $field['unique'] = true;
         $field['class'] = "font-size20 font-bold";
         $field['tag'] = "title";
         $field['list'] = true;
@@ -339,7 +383,7 @@ class Entity extends EntityCreateStorage
         $data[$field]['type'] = $data[$this->title]['type'] ?? "varchar";
         $data[$field]['size'] = $data[$field]['size'] ?? $data[$this->title]['size'];
         $data[$field]['null'] = false;
-        $data[$field]['key'] = "unique";
+        $data[$field]['unique'] = true;
         $data[$field]['class'] = "font-size08";
         $data[$field]['tag'] = "link";
         $data[$field]['input'] = "link";
@@ -403,7 +447,7 @@ class Entity extends EntityCreateStorage
         $field['type'] = 'varchar';
         $field['size'] = 255;
         $field['null'] = false;
-        $field['key'] = "unique";
+        $field['unique'] = true;
         $field['input'] = "image";
         $field['list'] = $field['list'] ?? true;
 
