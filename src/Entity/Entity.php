@@ -473,7 +473,7 @@ class Entity extends EntityCreateStorage
         $field['null'] = false;
         $field['allow'] = [0, 1];
         $field['input'] = "on";
-        $field['default'] = 0;
+        $field['default'] = $field['default'] ?? 0;
 
         return $field;
     }
