@@ -44,9 +44,9 @@ abstract class EntityCreateStorage extends EntityManagementData
         if ($this->data && is_array($this->data)) {
             foreach ($this->data as $column => $dados) {
                 $string = (empty($string) ? "CREATE TABLE IF NOT EXISTS `" . parent::getPre($this->entityName) . "` (" : $string . ", ")
-                    . "`{$column}` {$dados['type']}" . (isset($dados['size']) ? "({$dados['size']}) " : " ")
-                    . (isset($dados['null']) && !$dados['null'] ? "NOT NULL " : "")
-                    . (isset($dados['default']) ? $this->prepareDefault($dados['default']) : (!isset($dados['null']) || $dados['null'] ? "DEFAULT NULL" : ""));
+                    . "`{$column}` {$dados['type']}" . (isset($dados['size']) && !empty($dados['size']) ? "({$dados['size']}) " : " ")
+                    . (!$dados['null'] ? "NOT NULL " : "")
+                    . (isset($dados['default']) && !empty($dados['default']) ? $this->prepareDefault($dados['default']) : ($dados['null'] ? "DEFAULT NULL" : ""));
             }
 
             $string .= ") ENGINE=InnoDB DEFAULT CHARSET=utf8";
@@ -73,7 +73,7 @@ abstract class EntityCreateStorage extends EntityManagementData
                             $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
                             break;
                         case "fk":
-                            if (isset($dados['key_delete']) && isset($dados['key_update']) && isset($dados['table'])) {
+                            if (isset($dados['key_delete']) && isset($dados['key_update']) && !empty($dados['table'])) {
                                 if (!$this->existEntityStorage($dados['table'])) {
                                     new Entity($dados['table'], $this->library);
                                 }
