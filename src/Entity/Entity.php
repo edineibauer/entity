@@ -13,7 +13,6 @@ use Helpers\Helper;
 
 class Entity extends EntityCreateStorage
 {
-    private $library;
     private $entityName;
     private $entityDados;
     private $title;
@@ -21,50 +20,18 @@ class Entity extends EntityCreateStorage
     private $image;
     private $erro;
 
-    public function __construct($entity, $library = null)
+    public function __construct($entity)
     {
         $this->entityName = $entity;
-        if($library) {
-            $this->setLibrary($library);
-        } else {
-            $find = false;
-            if(file_exists(PATH_HOME . "routeEntity/routeEntity.json")) {
-                $route = json_decode(file_get_contents(PATH_HOME . "routeEntity/routeEntity.json"), true);
-                if (isset($route[$this->entityName])) {
-                    $find = true;
-                    $this->setLibrary($route[$this->entityName]);
-                }
-            }
-            if(!$find) {
-                foreach (Helper::listFolder(PATH_HOME . "vendor/conn") as $folder) {
-                    if(file_exists(PATH_HOME . "vendor/conn/{$folder}/entity/{$this->entityName}.json")) {
-                        $this->setLibrary($folder);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * @param string $library
-     */
-    public function setLibrary(string $library)
-    {
-        $this->library = $library;
         $this->loadStart();
     }
 
     public function insertDataEntity($arrayDataEntity)
     {
-        if ($this->library) {
-            if (is_array($arrayDataEntity)) {
-                $this->setEntityArray($arrayDataEntity, $this->entityDados);
-            } elseif (Check::json($arrayDataEntity)) {
-                $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
-            }
-        } else {
-            $this->erro = "Informe a biblioteca destino desta entidade";
+        if (is_array($arrayDataEntity)) {
+            $this->setEntityArray($arrayDataEntity, $this->entityDados);
+        } elseif (Check::json($arrayDataEntity)) {
+            $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
         }
     }
 
@@ -87,29 +54,22 @@ class Entity extends EntityCreateStorage
     /**
      * @return array
      */
-    public function getJsonInfoEntity() :array
+    public function getJsonInfoEntity(): array
     {
-        if ($this->library) {
-            return json_decode(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '_info.json'), true);
-        } else {
-            $this->erro = "Informe a biblioteca destino desta entidade";
-        }
-
-        return array();
+        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '_info.json'), true);
     }
 
     private function loadStart()
     {
-        if (file_exists(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $this->entityName . '.json'), true);
+        if (file_exists(PATH_HOME . "entity/cache/" . $this->entityName . '.json')) {
+            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '.json'), true);
 
-        } elseif (file_exists(PATH_HOME . "vendor/conn/{$this->library}/entity/" . $this->entityName . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "vendor/conn/{$this->library}/entity/" . $this->entityName . '.json'));
+        } elseif (file_exists(PATH_HOME . "entity/" . $this->entityName . '.json')) {
+            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "entity/" . $this->entityName . '.json'));
 
         } else {
-            Helper::createFolderIfNoExist(PATH_HOME . "vendor/conn/{$this->library}/entity");
-            $this->erro = "os arquivos json para serem carregados devem ficar na pasta 'vendor/conn/{$this->library}/entity/'";
-
+            Helper::createFolderIfNoExist(PATH_HOME . "entity");
+            $this->erro = "as entidades devem ficar na pasta 'entity/' e no formato json";
         }
     }
 
@@ -119,7 +79,7 @@ class Entity extends EntityCreateStorage
 
             $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
             $this->createCache($this->entityName, $this->entityDados);
-            parent::createStorageEntity($this->entityName, $this->library, $this->entityDados);
+            parent::createStorageEntity($this->entityName, $this->entityDados);
 
         } else if (!$this->erro) {
 
@@ -130,25 +90,9 @@ class Entity extends EntityCreateStorage
 
     private function createCache(string $nome, array $data)
     {
-        Helper::createFolderIfNoExist(PATH_HOME . "vendor/conn/{$this->library}/entity/cache");
-        $fp = fopen(PATH_HOME . "vendor/conn/{$this->library}/entity/cache/" . $nome . '.json', "w");
+        Helper::createFolderIfNoExist(PATH_HOME . "entity/cache");
+        $fp = fopen(PATH_HOME . "entity/cache/" . $nome . '.json', "w");
         fwrite($fp, json_encode($data));
-        fclose($fp);
-
-        $this->createRouteLibrary($nome);
-    }
-
-    private function createRouteLibrary($nome)
-    {
-        Helper::createFolderIfNoExist(PATH_HOME . "routes");
-        if(!file_exists(PATH_HOME . "routes/routeEntity.json")) {
-            $dados = "{";
-        } else {
-            $dados = substr(file_get_contents(PATH_HOME . "routes/routeEntity.json"),0,-1) . ", ";
-        }
-
-        $fp = fopen(PATH_HOME . "routes/routeEntity.json", "w");
-        fwrite($fp, $dados . "\"{$nome}\": \"{$this->library}\"}");
         fclose($fp);
     }
 

@@ -10,26 +10,13 @@ namespace Entity;
 
 class EntityInfo
 {
-    private $library;
     private $entityName;
     private $entityDados;
     private $erro;
 
-    public function __construct($entity, $library = null)
+    public function __construct($entity)
     {
         $this->entityName = $entity;
-        if($library) {
-            $this->setLibrary($library);
-        }
-    }
-
-    /**
-     * @param mixed $library
-     */
-    public function setLibrary($library)
-    {
-        $this->library = $library;
-        $this->loadStart();
     }
 
     /**
@@ -50,21 +37,22 @@ class EntityInfo
 
     private function loadStart()
     {
-        if ($this->library) {
-            if (file_exists(PATH_HOME . "sql/entities_worked/" . $this->entityName . '_info.json')) {
-                $this->entityDados = json_decode(file_get_contents(PATH_HOME . "sql/entities_worked/" . $this->entityName . '_info.json'), true);
+        if(!$this->checkExistInfo()) {
+            new Entity($this->entityName);
 
-            } else {
-                new Entity($this->entityName);
-
-                if (file_exists(PATH_HOME . "sql/entities_worked/" . $this->entityName . '_info.json')) {
-                    $this->entityDados = json_decode(file_get_contents(PATH_HOME . "sql/entities_worked/" . $this->entityName . '_info.json'), true);
-                } else {
-                    $this->erro = "os arquivos json para serem carregados devem ficar na pasta 'sql/entities/'";
-                }
+            if(!$this->checkExistInfo()) {
+                $this->erro = "entidade não encontrada.";
             }
-        } else {
-            $this->erro = "Informe a biblioteca destino desta entidade";
         }
+    }
+
+    private function checkExistInfo()
+    {
+        if (file_exists(PATH_HOME . "entity/cache/" . $this->entityName . '_info.json')) {
+            $this->entityDados = json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '_info.json'), true);
+            return true;
+        }
+
+        return false;
     }
 }
