@@ -18,11 +18,13 @@ class Entity extends EntityCreateStorage
     private $title;
     private $primary;
     private $image;
+    private $identificador;
     private $erro;
 
     public function __construct($entity)
     {
         $this->entityName = $entity;
+        $this->identificador = 0;
         $this->loadStart();
     }
 
@@ -215,6 +217,8 @@ class Entity extends EntityCreateStorage
         $field["prefixo"] = $field["prefixo"] ?? "";
         $field["sulfixo"] = $field["sulfixo"] ?? "";
         $field['key'] = $field['key'] ?? "";
+        $field['identificador'] = $this->identificador;
+        $this->identificador ++;
 
         return $field;
     }
