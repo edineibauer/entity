@@ -217,7 +217,11 @@ class Entity extends EntityCreateStorage
         $field["prefixo"] = $field["prefixo"] ?? "";
         $field["sulfixo"] = $field["sulfixo"] ?? "";
         $field['key'] = $field['key'] ?? "";
-        $field['identificador'] = $this->identificador;
+        if(isset($field['identificador'])) {
+            $this->identificador = $field['identificador'] > $this->identificador ? $field['identificador'] : $this->identificador;
+        } else {
+            $field['identificador'] = $this->identificador;
+        }
         $this->identificador ++;
 
         return $field;
