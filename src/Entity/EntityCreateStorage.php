@@ -22,7 +22,7 @@ abstract class EntityCreateStorage extends EntityManagementData
         $this->data = $data;
         parent::setTable($this->entityName);
 
-        if(!$this->existEntityStorage($entityName)) {
+        if (!$this->existEntityStorage($entityName)) {
             $this->prepareCommandToCreateTable();
             $this->createKeys();
         }
@@ -58,26 +58,25 @@ abstract class EntityCreateStorage extends EntityManagementData
         if ($this->data && is_array($this->data)) {
             $sql = new SqlCommand();
             foreach ($this->data as $column => $dados) {
-                if($dados['unique']) {
+                if ($dados['unique']) {
                     $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD UNIQUE KEY `{$column}` (`{$column}`)");
                 }
-                if($dados['indice']) {
+                if ($dados['indice']) {
                     $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD KEY `{$column}` (`{$column}`)");
                 }
 
-                if(!empty($dados['key'])) {
+                if (!empty($dados['key'])) {
                     if ($dados['key'] === "primary") {
                         $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
-                    }elseif (in_array($dados['key'], array("extend", "extend_mult", "list", "list_mult"))){
-                            if (isset($dados['key_delete']) && isset($dados['key_update']) && !empty($dados['table'])) {
-                                if (!$this->existEntityStorage($dados['table'])) {
-                                    new Entity($dados['table']);
-                                }
-
-                                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `fk_{$column}` (`{$column}`)");
-                                $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $this->entityName) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($dados['table']) . "` (`id`) ON DELETE " . strtoupper($dados['key_delete']) . " ON UPDATE " . strtoupper($dados['key_update']));
+                    } elseif (in_array($dados['key'], array("extend", "extend_mult", "list", "list_mult"))) {
+                        if (isset($dados['key_delete']) && isset($dados['key_update']) && !empty($dados['table'])) {
+                            if (!$this->existEntityStorage($dados['table'])) {
+                                new Entity($dados['table']);
                             }
-                            break;
+
+                            $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD KEY `fk_{$column}` (`{$column}`)");
+                            $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $this->entityName) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($dados['table']) . "` (`id`) ON DELETE " . strtoupper($dados['key_delete']) . " ON UPDATE " . strtoupper($dados['key_update']));
+                        }
                     }
                 }
             }
