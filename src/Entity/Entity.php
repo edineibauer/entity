@@ -101,31 +101,19 @@ class Entity extends EntityCreateStorage
         if ($data && is_array($data)) {
             foreach ($data as $column => $dados) {
                 switch ($dados['type']) {
-                    case '1-1':
-                        $data[$column] = $this->list($data[$column], $column);
-                        break;
-                    case '1-n':
-                        $data[$column] = $this->extendMultiple($data[$column]);
-                        break;
-                    case 'n-n':
-                        $data[$column] = $this->listMultiple($data[$column]);
-                        break;
                     case 'extend':
                         $data[$column] = $this->extend($data[$column]);
                         break;
-                    case 'extend_multiple':
+                    case 'extend_mult':
                         $data[$column] = $this->extendMultiple($data[$column]);
                         break;
                     case 'list':
                         $data[$column] = $this->list($data[$column], $column);
                         break;
-                    case 'list_multiple':
+                    case 'list_mult':
                         $data[$column] = $this->listMultiple($data[$column]);
                         break;
                     case 'pri':
-                        $data[$column] = $this->inputPrimary($data[$column], $column);
-                        break;
-                    case 'primary':
                         $data[$column] = $this->inputPrimary($data[$column], $column);
                         break;
                     case 'int':
@@ -167,11 +155,26 @@ class Entity extends EntityCreateStorage
                     case 'text':
                         $data[$column] = $this->inputText($data[$column]);
                         break;
+                    case 'textarea':
+                        $data[$column] = $this->inputTextArea($data[$column]);
+                        break;
                     case 'on':
                         $data[$column] = $this->inputOn($data[$column]);
                         break;
                     case 'select':
                         $data[$column] = $this->inputSelect($data[$column]);
+                        break;
+                    case 'valor':
+                        $data[$column] = $this->inputValor($data[$column]);
+                        break;
+                    case 'float':
+                        $data[$column] = $this->inputFloat($data[$column]);
+                        break;
+                    case 'cpf':
+                        $data[$column] = $this->inputCpf($data[$column]);
+                        break;
+                    case 'cnpj':
+                        $data[$column] = $this->inputCnpj($data[$column]);
                         break;
                 }
                 $data[$column] = $this->checkTagsValuesDefault($data[$column], $column);
@@ -285,6 +288,14 @@ class Entity extends EntityCreateStorage
     {
         $field['type'] = "varchar";
         $field['input'] = "text";
+
+        return $field;
+    }
+
+    private function inputTextArea($field)
+    {
+        $field['type'] = "text";
+        $field['input'] = "textarea";
 
         return $field;
     }
@@ -426,6 +437,40 @@ class Entity extends EntityCreateStorage
     {
         $field['type'] = 'int';
         $field['input'] = "select";
+
+        return $field;
+    }
+
+    private function inputValor($field)
+    {
+        $field['type'] = 'double';
+        $field['input'] = "valor";
+
+        return $field;
+    }
+
+    private function inputFloat($field)
+    {
+        $field['type'] = 'float';
+        $field['input'] = "float";
+
+        return $field;
+    }
+
+    private function inputCpf($field)
+    {
+        $field['type'] = 'varchar';
+        $field['input'] = "cpf";
+        $field['size'] = 11;
+
+        return $field;
+    }
+
+    private function inputCnpj($field)
+    {
+        $field['type'] = 'varchar';
+        $field['input'] = "cnpj";
+        $field['size'] = 14;
 
         return $field;
     }
