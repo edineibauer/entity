@@ -66,11 +66,9 @@ abstract class EntityCreateStorage extends EntityManagementData
                 }
 
                 if(!empty($dados['key'])) {
-                    switch ($dados['key']) {
-                        case "primary":
-                            $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
-                            break;
-                        case "fk":
+                    if ($dados['key'] === "primary") {
+                        $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
+                    }elseif (in_array($dados['key'], array("extend", "extend_mult", "list", "list_mult"))){
                             if (isset($dados['key_delete']) && isset($dados['key_update']) && !empty($dados['table'])) {
                                 if (!$this->existEntityStorage($dados['table'])) {
                                     new Entity($dados['table']);
