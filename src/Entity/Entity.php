@@ -239,7 +239,7 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "extend";
-        $field['null'] = false;
+        $field['null'] = $field['null'] ?? false;
 
         return $field;
     }
