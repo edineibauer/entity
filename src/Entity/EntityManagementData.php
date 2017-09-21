@@ -16,8 +16,7 @@ use Helpers\Check;
 
 abstract class EntityManagementData
 {
-    private $entityJson;
-    private $entityDados;
+    private $extendMult;
     private $table;
     private $erro;
     private $idData;
@@ -30,13 +29,12 @@ abstract class EntityManagementData
 
     /**
      * @param array $entity
-     * @param array $entidadeFields
+     * @param array $entidadeStruct
      */
-    protected function setEntityArray(array $entity, array $entidadeFields)
+    protected function setEntityArray(array $entity, array $entidadeStruct)
     {
-        $this->entityDados = !isset($entity[$this->table]) ? array($this->table => $entity) : $entity;
-        $this->entityJson = $entidadeFields;
-        $this->insertEntity();
+        $entity = !isset($entity[$this->table]) ? array($this->table => $entity) : $entity;
+        $this->idData = $this->insertEntity($entity, $entidadeStruct);
         $this->showResponse();
     }
 
@@ -65,39 +63,53 @@ abstract class EntityManagementData
         return $this->erro;
     }
 
-    private function insertEntity()
+    private function insertEntity($entityDados, $entityStruct)
     {
-        //Para cada entidade enviada
-        foreach ($this->entityDados as $table => $dados) {
-            if (isset($dados['id'])) {
-                $create = new TableCrud($table);
-                $create->load($dados['id']);
-                if ($create->exist()) {
-                    $dados = $this->validateDados($dados);
-                    if (!$this->erro) {
-                        $create->setDados($dados);
-                        $create->save();
-                        $this->idData = $dados['id'];
-                    } else {
-                        var_dump($this->erro);
-                    }
-                } else {
-                    $this->erro['id'] = "Falhou. Id não encontrado para atualização das informações.";
-                    var_dump($this->erro);
-                }
+        foreach ($entityDados as $table => $dados) {
+            $dados = $this->validateDados($dados, $table, $entityStruct);
+
+            if (isset($dados['id']) && !empty($dados['id']) && $dados['id'] > 0) {
+                return $this->updateTableDados($table, $dados);
 
             } else {
-                $dados = $this->validateDados($dados);
-                if (!$this->erro) {
-                    $create = new TableCrud($table);
-                    $create->loadArray($dados);
-                    $this->idData = $create->save();
-                } else {
-                    var_dump($this->erro);
-                }
 
+                return $this->createTableDados($table, $dados);
             }
         }
+
+        return null;
+    }
+
+    private function createTableDados($table, $dados)
+    {
+        if (isset($dados['id'])) {
+            unset($dados['id']);
+        }
+
+        if (!$this->erro) {
+            $create = new TableCrud($table);
+            $create->loadArray($dados);
+            return $create->save();
+        }
+
+        return null;
+    }
+
+    private function updateTableDados($table, $dados)
+    {
+        $create = new TableCrud($table);
+        $create->load($dados['id']);
+        if ($create->exist()) {
+            if (!$this->erro) {
+                $create->setDados($dados);
+                $create->save();
+                return $dados['id'];
+            }
+        } else {
+            $this->erro['id'] = "Falhou. Id não encontrado para atualização das informações.";
+        }
+
+        return null;
     }
 
     private function showResponse()
@@ -105,71 +117,92 @@ abstract class EntityManagementData
         if ($this->erro) {
             echo json_encode(array("response" => 2, "mensagem" => "Uma ou mais informações precisam de alteração", "erros" => $this->getErroManagementData()));
         } elseif ($this->idData) {
-            echo json_encode(array("response" => 1, "id" => $this->idData, "mensagem" => "informações salvas com sucesso."));
+            echo json_encode(array("response" => 1, "id" => $this->idData, "mensagem" => "Salvo"));
         }
     }
 
-    private function validateDados($dados)
+    private function validateDados($dados, $table, $struct)
     {
-        $update = null;
+        $id = $this->getPrimaryKeyValue($table, $dados);
         $newdados = array();
-        foreach ($this->entityJson as $column => $fields) {
-            if (!$this->erro) {
-                if (!isset($this->entityJson[$column]['key']) || $this->entityJson[$column]['key'] !== "primary") {
-                    if (!$update || $this->checkIsUpdated($column)) {
-                        $newdados[$column] = $this->checkValue($column, $update, $dados[$column] ?? null);
-                    }
-                    if ($this->erro) {
-                        break;
-                    }
 
-                } elseif (isset($dados[$column]) && $dados[$column] > 0) {
-                    $update['column'] = $column;
-                    $update['value'] = $dados[$column];
-                }
-            } else {
-                var_dump($this->erro);
+        foreach ($struct as $column => $fields) {
+            if (!$this->erro && (!$id || $fields['update']) && $fields['key'] !== "primary") {
+                $newdados[$column] = $this->checkValue($dados, $column, $fields, $id);
             }
         }
 
         return $newdados;
     }
 
-    private function checkIsUpdated($column)
+    private function getPrimaryKeyValue($table, $dados)
     {
-        return isset($this->entityJson[$column]['update']) ? $this->entityJson[$column]['update'] : true;
+        $entityInfo = new EntityInfo($table);
+        $entityInfo = $entityInfo->getJsonInfoEntity();
+        if (isset($entityInfo['primary']) && !empty($entityInfo['primary']) && isset($dados[$entityInfo['primary']]) && !empty($dados[$entityInfo['primary']])) {
+            $id['column'] = $entityInfo['primary'];
+            $id['value'] = $dados[$entityInfo['primary']];
+            return $id;
+        }
+        return null;
     }
 
-    private function checkValue($column, $update = null, $value = null)
+    private function checkValue($dados, $column, $fields, $id = null)
     {
-        $value = $this->checkDefault($this->entityJson[$column], $value);
-        $value = $this->checkLink($column, $value);
-        $this->checkNull($this->entityJson[$column], $value, $column);
-        $this->checkAllowValues($column, $value);
-        $this->checkType($column, $value);
-        $this->checkSize($column, $value);
-        $this->checkValidate($this->entityJson[$column], $value, $column);
-        $this->checkRegularExpressionValidate($this->entityJson[$column], $value, $column);
-        $this->checkUnique($column, $value, $update);
-        $this->checkTagsFieldDefined($column, $value);
-        $this->checkFile($column, $value);
+        $value = $dados[$column] ?? null;
+        if (in_array($fields['key'], array("extend", "extend_mult", "list", "list_mul")) && !empty($fields['table'])) {
+            $value = $this->insertDataIntoExtend($fields, $value);
+        } else {
+
+            $value = $this->checkDefault($fields, $value);
+            $value = $this->checkLink($fields, $dados, $value);
+            $value = $this->checkNull($fields, $value, $column);
+            $this->checkAllowValues($fields, $column, $value);
+            $this->checkType($fields, $column, $value);
+            $this->checkSize($fields, $column, $value);
+            $this->checkValidate($fields, $value, $column);
+            $this->checkRegularExpressionValidate($fields, $value, $column);
+            $this->checkUnique($fields, $column, $value, $id);
+            $this->checkTagsFieldDefined($fields, $column, $value);
+            $this->checkFile($fields, $column, $value);
+        }
 
         return $value;
     }
 
-    private function checkTagsFieldDefined($column, $value)
+    private function insertDataIntoExtend($fields, $dados = null)
     {
-        if ($this->haveTag("email", $this->entityJson[$column]['tag'] ?? null)) {
+        if (in_array($fields['key'], array("extend_mult", "list_mul"))) {
+            $this->extendMult = $dados;
+        } else {
+            if($dados && is_array($dados)) {
+                return $this->prepareInsertDataExtend($dados, $fields['table']);
+            }
+            return null;
+        }
+    }
+
+    private function prepareInsertDataExtend($dados, $table)
+    {
+        $struct = new Entity($table);
+        $dados = !isset($dados[$table]) ? array($table => $dados) : $dados;
+
+        return $this->insertEntity($dados, $struct->getJsonStructEntity());
+    }
+
+    private function checkTagsFieldDefined($fields, $column, $value)
+    {
+        if ($this->haveTag("email", $fields['tag'] ?? null)) {
             if (!Check::email($value)) {
                 $this->setErro("formato de email inválido", $column);
             }
 
-        } elseif ($this->haveTag("cpf", $this->entityJson[$column]['tag'] ?? null)) {
+        } elseif ($this->haveTag("cpf", $fields['tag'] ?? null)) {
             if (!Check::cpf($value)) {
                 $this->setErro("formato de cpf inválido", $column);
             }
 
-        } elseif ($this->haveTag("cnpj", $this->entityJson[$column]['tag'] ?? null)) {
+        } elseif ($this->haveTag("cnpj", $fields['tag'] ?? null)) {
             if (!Check::cnpj($value)) {
                 $this->setErro("formato de cnpj inválido", $column);
             }
@@ -185,9 +218,9 @@ abstract class EntityManagementData
         return false;
     }
 
-    private function checkFile($column, $value)
+    private function checkFile($fields, $column, $value)
     {
-        if ($this->haveTag("cover", $this->entityJson[$column]['tag'] ?? null)) {
+        if ($this->haveTag("cover", $fields['tag'] ?? null)) {
             //            $control = new ImageControl();
             //            $control->setTable($this->table);
             //            $control->setId($this->id);
@@ -198,54 +231,54 @@ abstract class EntityManagementData
         }
     }
 
-    private function checkSize($column, $value)
+    private function checkSize($fields, $column, $value)
     {
-        if ($this->entityJson[$column]['type'] === "varchar" && strlen($value) > $this->entityJson[$column]['size']) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
-        } elseif ($this->entityJson[$column]['type'] === "char" && strlen($value) > 1) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
-        } elseif ($this->entityJson[$column]['type'] === "tinytext" && strlen($value) > 255) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
-        } elseif ($this->entityJson[$column]['type'] === "text" && strlen($value) > 65535) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
-        } elseif ($this->entityJson[$column]['type'] === "mediumtext" && strlen($value) > 16777215) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
-        } elseif ($this->entityJson[$column]['type'] === "longtext" && strlen($value) > 4294967295) {
-            $this->setErro("tamanho máximo de caracteres excedido. Max {$this->entityJson[$column]['size']}", $column);
+        if ($fields['type'] === "varchar" && strlen($value) > $fields['size']) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$fields['size']}", $column);
+        } elseif ($fields['type'] === "char" && strlen($value) > 1) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$fields['size']}", $column);
+        } elseif ($fields['type'] === "tinytext" && strlen($value) > 255) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$fields['size']}", $column);
+        } elseif ($fields['type'] === "text" && strlen($value) > 65535) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$fields['size']}", $column);
+        } elseif ($fields['type'] === "mediumtext" && strlen($value) > 16777215) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$fields['size']}", $column);
+        } elseif ($fields['type'] === "longtext" && strlen($value) > 4294967295) {
+            $this->setErro("tamanho máximo de caracteres excedido. Max {$fields['size']}", $column);
 
-        } elseif ($this->entityJson[$column]['type'] === "tinyint") {
-            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 8) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
+        } elseif ($fields['type'] === "tinyint") {
+            if ($value > (pow(2, ($fields['size'] * 2)) - 1) || $value > (pow(2, 8) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($fields['size'] * 2)) - 1), $column);
             }
-        } elseif ($this->entityJson[$column]['type'] === "smallint") {
-            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 16) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
+        } elseif ($fields['type'] === "smallint") {
+            if ($value > (pow(2, ($fields['size'] * 2)) - 1) || $value > (pow(2, 16) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($fields['size'] * 2)) - 1), $column);
             }
-        } elseif ($this->entityJson[$column]['type'] === "mediumint") {
-            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
+        } elseif ($fields['type'] === "mediumint") {
+            if ($value > (pow(2, ($fields['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($fields['size'] * 2)) - 1), $column);
             }
-        } elseif ($this->entityJson[$column]['type'] === "int") {
-            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
+        } elseif ($fields['type'] === "int") {
+            if ($value > (pow(2, ($fields['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($fields['size'] * 2)) - 1), $column);
             }
-        } elseif ($this->entityJson[$column]['type'] === "bigint") {
-            if ($value > (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)) {
-                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($this->entityJson[$column]['size'] * 2)) - 1), $column);
+        } elseif ($fields['type'] === "bigint") {
+            if ($value > (pow(2, ($fields['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)) {
+                $this->setErro("numero excedeu seu limite. Max " . (pow(2, ($fields['size'] * 2)) - 1), $column);
             }
         }
     }
 
-    private function checkType($column, $value)
+    private function checkType($fields, $column, $value)
     {
         if (!empty($value)) {
-            if (in_array($this->entityJson[$column]['type'], array("tinyint", "smallint", "mediumint", "int", "bigint"))) {
+            if (in_array($fields['type'], array("tinyint", "smallint", "mediumint", "int", "bigint"))) {
                 if (!is_numeric($value)) {
                     $this->setErro("valor numérico inválido.", $column);
                 }
 
-            } elseif ($this->entityJson[$column]['type'] === "decimal") {
-                $size = (isset($this->entityJson[$column]['size']) ? explode(',', str_replace(array('(', ')'), '', $this->entityJson[$column]['size'])) : array(10, 30));
+            } elseif ($fields['type'] === "decimal") {
+                $size = (isset($fields['size']) ? explode(',', str_replace(array('(', ')'), '', $fields['size'])) : array(10, 30));
                 $val = explode('.', str_replace(',', '.', $value));
                 if (strlen($val[1]) > $size[1]) {
                     $this->setErro("valor das casas decimais excedido. Max {$size[1]}", $column);
@@ -253,64 +286,56 @@ abstract class EntityManagementData
                     $this->setErro("valor inteiro do valor decimal excedido. Max {$size[0]}", $column);
                 }
 
-            } elseif (in_array($this->entityJson[$column]['type'], array("double", "real"))) {
+            } elseif (in_array($fields['type'], array("double", "real"))) {
                 if (!is_double($value)) {
                     $this->setErro("valor double não válido", $column);
                 }
 
-            } elseif ($this->entityJson[$column]['type'] === "float") {
+            } elseif ($fields['type'] === "float") {
                 if (!is_float($value)) {
                     $this->setErro("valor flutuante não é válido", $column);
                 }
 
-            } elseif (in_array($this->entityJson[$column]['type'], array("bit", "boolean", "serial"))) {
+            } elseif (in_array($fields['type'], array("bit", "boolean", "serial"))) {
                 if (!is_bool($value)) {
                     $this->setErro("valor boleano inválido. (true ou false)", $column);
                 }
-            } elseif (in_array($this->entityJson[$column]['type'], array("datetime", "timestamp"))) {
+            } elseif (in_array($fields['type'], array("datetime", "timestamp"))) {
                 if (!preg_match('/\d{4}-\d{2}-\d{2}[T\s]+\d{2}:\d{2}/i', $value)):
                     $this->setErro("formato de data inválido ex válido:(2017-08-23 21:58:00)", $column);
                 endif;
 
-            } elseif ($this->entityJson[$column]['type'] === "date") {
+            } elseif ($fields['type'] === "date") {
                 if (!preg_match('/\d{4}-\d{2}-\d{2}/i', $value)):
                     $this->setErro("formato de data inválido ex válido:(2017-08-23)", $column);
                 endif;
 
-            } elseif ($this->entityJson[$column]['type'] === "time") {
+            } elseif ($fields['type'] === "time") {
                 if (!preg_match('/\d{2}:\d{2}/i', $value)):
                     $this->setErro("formato de tempo inválido ex válido:(21:58)", $column);
                 endif;
 
-                //            } elseif ($this->entityJson[$column]['type'] === "json") {
+                //            } elseif ($fields['type'] === "json") {
 
             }
         }
     }
 
-    private function checkUnique($column, $value, $update = null)
+    private function checkUnique($fields, $column, $value, $id = null)
     {
-        if ($this->entityJson[$column]['unique']) {
-            if ($update) {
-                $read = new Read();
-                $read->exeRead($this->table, "WHERE {$column} = '{$value}' && {$update['column']} != {$update['value']}");
-                if ($read->getResult()) {
-                    $this->setErro("campo precisa ser único", $column);
-                }
-            } else {
-                $read = new Read();
-                $read->exeRead($this->table, "WHERE {$column} = '{$value}'");
-                if ($read->getResult()) {
-                    $this->setErro("campo precisa ser único", $column);
-                }
+        if ($fields['unique']) {
+            $read = new Read();
+            $read->exeRead($this->table, "WHERE {$column} = '{$value}'" . ($id ? " && {$id['column']} != {$id['value']}" : ""));
+            if ($read->getResult()) {
+                $this->setErro("campo precisa ser único", $column);
             }
         }
     }
 
-    private function checkAllowValues($column, $value)
+    private function checkAllowValues($fields, $column, $value)
     {
-        if (isset($this->entityJson[$column]['allow']) && !empty($value)) {
-            if (!in_array($value, $this->entityJson[$column]['allow'])) {
+        if (!empty($fields['allow']) && !empty($value)) {
+            if (!in_array($value, $fields['allow'])) {
                 $this->setErro("valor não permitido", $column);
             }
         }
@@ -318,14 +343,18 @@ abstract class EntityManagementData
 
     private function checkNull($field, $value, $column)
     {
-        if (isset($field['null']) && !$field['null'] && empty($value)) {
+        if (!$field['null'] && empty($value)) {
             $this->setErro("campo precisa ser preenchido", $column);
+        } elseif($field['null'] && empty($value)) {
+            return null;
         }
+
+        return $value;
     }
 
     private function checkDefault($field, $value)
     {
-        if (isset($field['default']) && empty($value)) {
+        if (empty($value)) {
             switch ($field['default']) {
                 case "datetime":
                     return date("Y-m-d H:i:s");
@@ -344,10 +373,10 @@ abstract class EntityManagementData
         return $value;
     }
 
-    private function checkLink($column, $value)
+    private function checkLink($fields, $dados, $value)
     {
-        if (isset($this->entityJson[$column]['link'])) {
-            return Check::name($this->entityDados[$this->table][$this->entityJson[$column]['link']]);
+        if (isset($fields['link'])) {
+            return Check::name($dados[$fields['link']]);
         }
 
         return $value;

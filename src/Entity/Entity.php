@@ -224,6 +224,10 @@ class Entity extends EntityCreateStorage
         }
         $this->identificador ++;
 
+        if($field['unique']) {
+            $field['null'] = false;
+        }
+
         return $field;
     }
 
@@ -287,6 +291,8 @@ class Entity extends EntityCreateStorage
         $field['null'] = false;
         $field['key'] = "primary";
         $field['input'] = "hidden";
+        $field['update'] = false;
+        $field['list'] = $field['list'] ?? false;
         $this->primary = $column;
 
         return $field;
@@ -328,8 +334,8 @@ class Entity extends EntityCreateStorage
     {
         $field['type'] = "varchar";
         $field['size'] = $field['size'] ?? 127;
-        $field['null'] = false;
-        $field['unique'] = true;
+        $field['null'] = $field['null'] ?? false;
+        $field['unique'] = $field['unique'] ?? true;
         $field['class'] = "font-size20 font-bold";
         $field['tag'] = "title";
         $field['list'] = true;
