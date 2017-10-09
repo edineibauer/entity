@@ -195,7 +195,11 @@ abstract class EntityManagementData
         if ($dados && is_array($dados)) {
             if (in_array($fields['key'], array("extend_mult", "list_mult"))) {
                 foreach ($dados as $dado) {
-                    $this->extendMult[$fields['table']][] = $this->prepareInsertDataExtend($dado, $fields['table']);
+                    if(is_array($dado)) {
+                        $this->extendMult[$fields['table']][] = $this->prepareInsertDataExtend($dado, $fields['table']);
+                    } elseif(is_numeric($dado)) {
+                        $this->extendMult[$fields['table']][] = $dado;
+                    }
                 }
 
             } else {
