@@ -47,8 +47,8 @@ class Entity extends EntityCreateStorage
         $table = $table ?? $this->entityName;
 
         $info = new Entity($table);
-        $info = $info->getJsonInfoEntity();
         $struct = $info->getJsonStructEntity();
+        $info = $info->getJsonInfoEntity();
 
         $read = new Read();
         $read->exeRead(PRE . $table, "WHERE id = :id", "id={$id}");
