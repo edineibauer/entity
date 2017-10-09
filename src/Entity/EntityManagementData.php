@@ -9,6 +9,7 @@
 
 namespace Entity;
 
+use ConnCrud\Create;
 use ConnCrud\Delete;
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
@@ -65,20 +66,34 @@ abstract class EntityManagementData
 
     private function insertEntity($entityDados, $entityStruct)
     {
+        $idRetorno = null;
+
         foreach ($entityDados as $table => $dados) {
             $id = $this->getPrimaryKeyValue($table, $dados);
             $dados = $this->validateDados($dados, $entityStruct, $id, $table);
 
             if ($id['value']) {
-                return $this->updateTableDados($table, $dados, $id);
+                $idRetorno = $this->updateTableDados($table, $dados, $id);
 
             } else {
 
-                return $this->createTableDados($table, $dados);
+                $idRetorno = $this->createTableDados($table, $dados);
             }
+
+            $this->createRelationalInfo($table, $idRetorno, $this->extendMult);
         }
 
-        return null;
+        return $idRetorno;
+    }
+
+    private function createRelationalInfo($table, $idRetorno, $extend = null)
+    {
+        if($extend && is_array($extend)) {
+            $create = new Create();
+            foreach ($extend as $tableExtend => $id) {
+                $create->exeCreate(PRE . $table . "_" . $tableExtend, array($table."_id" => $idRetorno, $tableExtend."_id" => $id));
+            }
+        }
     }
 
     private function createTableDados($table, $dados)
@@ -154,6 +169,7 @@ abstract class EntityManagementData
         $value = $dados[$column] ?? null;
         if (in_array($fields['key'], array("extend", "extend_mult", "list", "list_mul")) && !empty($fields['table'])) {
             $value = $this->insertDataIntoExtend($fields, $value);
+
         } else {
 
             $value = $this->checkDefault($fields, $value);
@@ -174,14 +190,17 @@ abstract class EntityManagementData
 
     private function insertDataIntoExtend($fields, $dados = null)
     {
-        if (in_array($fields['key'], array("extend_mult", "list_mul"))) {
-            $this->extendMult = $dados;
-        } else {
-            if($dados && is_array($dados)) {
+        if ($dados && is_array($dados)) {
+            if (in_array($fields['key'], array("extend_mult", "list_mult"))) {
+                foreach ($dados as $dado) {
+                    $this->extendMult[$fields['table']][] = $this->prepareInsertDataExtend($dado, $fields['table']);
+                }
+
+            } else {
                 return $this->prepareInsertDataExtend($dados, $fields['table']);
             }
-            return null;
         }
+        return null;
     }
 
     private function prepareInsertDataExtend($dados, $table)
@@ -347,7 +366,7 @@ abstract class EntityManagementData
     {
         if (!$field['null'] && empty($value)) {
             $this->setErro("campo precisa ser preenchido", $column, $table);
-        } elseif($field['null'] && empty($value)) {
+        } elseif ($field['null'] && empty($value)) {
             return null;
         }
 
