@@ -249,7 +249,8 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "extend";
-        $field['null'] = $field['null'] ?? false;
+        $field['null'] = false;
+        $field['unique'] = true;
 
         return $field;
     }
@@ -263,6 +264,8 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "no action";
         $field['key_update'] = "no action";
         $field['input'] = "list";
+        $field['null'] = $field['null'] ?? true;
+        $field['unique'] = false;
 
         if (isset($field['tag']) && ((is_array($field['tag']) && in_array("image", $field['tag'])) || $field['tag'] === "image")) {
             $this->image = $column;
@@ -280,6 +283,8 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "extend_mult";
+        $field['null'] = false;
+        $field['unique'] = true;
 
         return $field;
     }
@@ -293,6 +298,8 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "no action";
         $field['key_update'] = "no action";
         $field['input'] = "list_mult";
+        $field['null'] = false;
+        $field['unique'] = false;
 
         return $field;
     }
