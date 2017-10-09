@@ -169,7 +169,7 @@ abstract class EntityManagementData
     private function checkValue($dados, $column, $fields, $table, $id = null)
     {
         $value = $dados[$column] ?? null;
-        if (in_array($fields['key'], array("extend", "extend_mult", "list", "list_mul")) && !empty($fields['table'])) {
+        if (in_array($fields['key'], array("extend", "extend_mult", "list", "list_mult")) && !empty($fields['table'])) {
             $value = $this->insertDataIntoExtend($fields, $value);
 
         } else {
@@ -436,7 +436,7 @@ abstract class EntityManagementData
     private function checkRegularExpressionValidate($field, $value, $column, $table)
     {
         //se existir expressão e se o valor não pode ser deixado em branco ou se o valor, valida expressão
-        if (isset($field['regular']) && !empty($value)):
+        if (!empty($field['regular']) && !empty($value) && is_string($value)):
             if (is_array($field['regular'])) {
                 foreach ($field['regular'] as $reg):
                     $this->validaRegularExpression($reg, $value, $column, $table);
