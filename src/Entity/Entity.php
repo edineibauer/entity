@@ -15,11 +15,16 @@ class Entity extends EntityCreateStorage
 {
     private $entityName;
     private $entityDados;
+    private $identificador;
+    private $erro;
+
     private $title;
     private $primary;
     private $image;
-    private $identificador;
-    private $erro;
+    private $extendData;
+    private $extendMultData;
+    private $listData;
+    private $listMultData;
 
     public function __construct($entity)
     {
@@ -104,16 +109,16 @@ class Entity extends EntityCreateStorage
             foreach ($data as $column => $dados) {
                 switch ($dados['type']) {
                     case 'extend':
-                        $data[$column] = $this->extend($data[$column]);
+                        $data[$column] = $this->extend($data[$column], $column);
                         break;
                     case 'extend_mult':
-                        $data[$column] = $this->extendMultiple($data[$column]);
+                        $data[$column] = $this->extendMultiple($data[$column], $column);
                         break;
                     case 'list':
                         $data[$column] = $this->list($data[$column], $column);
                         break;
                     case 'list_mult':
-                        $data[$column] = $this->listMultiple($data[$column]);
+                        $data[$column] = $this->listMultiple($data[$column], $column);
                         break;
                     case 'pri':
                         $data[$column] = $this->inputPrimary($data[$column], $column);
@@ -184,8 +189,12 @@ class Entity extends EntityCreateStorage
 
             $dataInfo = array(
                 "title" => $this->title ?? null,
+                "image" => $this->image ?? null,
                 "primary" => $this->primary ?? null,
-                "image" => $this->image ?? null
+                "extend" => $this->extendData ?? null,
+                "extendMult" => $this->extendMultData ?? null,
+                "list" => $this->listData ?? null,
+                "listMult" => $this->listMultData ?? null,
             );
             $this->createCache($this->entityName . "_info", $dataInfo);
         }
@@ -231,8 +240,9 @@ class Entity extends EntityCreateStorage
         return $field;
     }
 
-    private function extend($field)
+    private function extend($field, $column)
     {
+        $this->extendData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "extend";
@@ -246,6 +256,7 @@ class Entity extends EntityCreateStorage
 
     private function list($field, $column)
     {
+        $this->listData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "list";
@@ -260,8 +271,9 @@ class Entity extends EntityCreateStorage
         return $field;
     }
 
-    private function extendMultiple($field)
+    private function extendMultiple($field, $column)
     {
+        $this->extendMultData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "extend_mult";
@@ -272,8 +284,9 @@ class Entity extends EntityCreateStorage
         return $field;
     }
 
-    private function listMultiple($field)
+    private function listMultiple($field, $column)
     {
+        $this->listMultData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "list_mult";
