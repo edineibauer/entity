@@ -57,7 +57,7 @@ abstract class EntityCreateStorage extends EntityManagementData
 
     private function notIsMult($key = null)
     {
-        return !(!$key || $key === "list_mult" || $key === "extend_mult");
+        return !($key || $key === "list_mult" || $key === "extend_mult");
     }
 
     private function createKeys()
