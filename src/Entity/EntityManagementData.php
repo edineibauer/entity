@@ -432,6 +432,6 @@ abstract class EntityManagementData
 
     protected function getPre(string $table): string
     {
-        return (defined("PRE") ? PRE : "") . $table;
+        return (defined("PRE") && !preg_match("/^" . PRE . "/i", $table) ? PRE : "") . $table;
     }
 }
