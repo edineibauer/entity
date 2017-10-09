@@ -8,6 +8,7 @@
 
 namespace Entity;
 
+use ConnCrud\Read;
 use Helpers\Check;
 use Helpers\Helper;
 
@@ -42,6 +43,19 @@ class Entity extends EntityCreateStorage
         }
     }
 
+    public function getDataEntity($id, $table = null) {
+        $table = $table ?? $this->entityName;
+
+        $info = new Entity($table);
+        $info = $info->getJsonInfoEntity();
+        $struct = $info->getJsonStructEntity();
+
+        $read = new Read();
+        $read->exeRead(PRE . $table, "WHERE id = :id", "id={$id}");
+
+        return ($read->getResult() ? $this->getDadosFk($read->getResult()[0], $info, $struct, $table) : $struct);
+    }
+
     /**
      * @return mixed
      */
@@ -64,6 +78,53 @@ class Entity extends EntityCreateStorage
     public function getJsonInfoEntity(): array
     {
         return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '_info.json'), true);
+    }
+
+    private function getDadosFk($dados, $info, $struct, $table)
+    {
+        //extend and list busca dados
+        if(!empty($info['extend'])) {
+            foreach ($info['extend'] as $column) {
+                $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
+            }
+        }
+
+        //list busca dados
+        if(!empty($info['list'])) {
+            foreach ($info['list'] as $column) {
+                $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
+            }
+        }
+
+        //extend mult busca relações -> busca dados
+        if(!empty($info['extend_mult'])) {
+            foreach ($info['extend_mult'] as $column) {
+                $dados[$column][] = $this->readDataFromMultFk($column, $struct, $dados, $table);
+            }
+        }
+
+        //list mult busca relações -> busca dados
+        if(!empty($info['list_mult'])) {
+            foreach ($info['list_mult'] as $column) {
+                $dados[$column][] = $this->readDataFromMultFk($column, $struct, $dados, $table);
+            }
+        }
+
+        return $dados;
+    }
+
+    private function readDataFromMultFk($column, $struct, $dados, $table)
+    {
+        $result = null;
+        $read = new Read();
+        $read->exeRead(PRE . $table . "_" . $struct[$column]['table'], "WHERE {$table}_id = :ti", "ti={$dados['id']}");
+        if($read->getResult()) {
+            foreach ($read->getResult() as $item) {
+                $result[] = $this->getDataEntity($item[$struct[$column]['table'] . "_id"], $struct[$column]['table']);
+            }
+        }
+
+        return $result;
     }
 
     private function loadStart()
@@ -197,9 +258,9 @@ class Entity extends EntityCreateStorage
                 "unique" => $uniques,
                 "primary" => $this->primary ?? null,
                 "extend" => $this->extendData ?? null,
-                "extendMult" => $this->extendMultData ?? null,
+                "extend_mult" => $this->extendMultData ?? null,
                 "list" => $this->listData ?? null,
-                "listMult" => $this->listMultData ?? null,
+                "list_mult" => $this->listMultData ?? null,
             );
             $this->createCache($this->entityName . "_info", $dataInfo);
         }
