@@ -66,10 +66,10 @@ abstract class EntityCreateStorage extends EntityManagementData
             $sql = new SqlCommand();
             foreach ($this->data as $column => $dados) {
                 if ($dados['unique']) {
-                    $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD UNIQUE KEY `{$column}` (`{$column}`)");
+                    $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD UNIQUE KEY `unique_{$dados['identificador']}` (`{$column}`)");
                 }
                 if ($dados['indice']) {
-                    $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD KEY `{$column}` (`{$column}`)");
+                    $sql->exeCommand("ALTER TABLE `" . PRE . $this->entityName . "` ADD KEY `index_{$dados['identificador']}` (`{$column}`)");
                 }
 
                 if (!empty($dados['key'])) {
