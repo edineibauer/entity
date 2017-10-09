@@ -57,7 +57,7 @@ abstract class EntityCreateStorage extends EntityManagementData
 
     private function notIsMult($key = null)
     {
-        return (!$key || $key === "list_mult" || $key === "extend_mult");
+        return !(!$key || $key === "list_mult" || $key === "extend_mult");
     }
 
     private function createKeys()
@@ -86,7 +86,7 @@ abstract class EntityCreateStorage extends EntityManagementData
                             if ($dados['key'] === "extend" || $dados['key'] === "list") {
                                 $this->createIndexFk($this->entityName, $column, $dados['table'], $dados['key_delete'], $dados['key_update']);
                             } else {
-                                $this->createRelationalTable($column, $dados);
+                                $this->createRelationalTable($dados);
                             }
                         }
                     }
@@ -95,7 +95,7 @@ abstract class EntityCreateStorage extends EntityManagementData
         }
     }
 
-    private function createRelationalTable($column, $dados)
+    private function createRelationalTable($dados)
     {
         $table = $this->entityName . "_" . $dados['table'];
 
