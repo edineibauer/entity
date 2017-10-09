@@ -295,7 +295,7 @@ class Entity extends EntityCreateStorage
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "list_mult";
-        $field['key_delete'] = "no action";
+        $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "list_mult";
         $field['null'] = false;
