@@ -90,8 +90,10 @@ abstract class EntityManagementData
     {
         if($extend && is_array($extend)) {
             $create = new Create();
-            foreach ($extend as $tableExtend => $id) {
-                $create->exeCreate(PRE . $table . "_" . $tableExtend, array($table."_id" => $idRetorno, $tableExtend."_id" => $id));
+            foreach ($extend as $tableExtend => $ids) {
+                foreach ($ids as $id) {
+                    $create->exeCreate(PRE . $table . "_" . $tableExtend, array($table."_id" => $idRetorno, $tableExtend."_id" => $id));
+                }
             }
         }
     }
