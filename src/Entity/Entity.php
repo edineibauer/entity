@@ -342,7 +342,7 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "extend_mult";
-        $field['null'] = false;
+        $field['null'] = true;
         $field['unique'] = true;
 
         return $field;
@@ -357,7 +357,7 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "list_mult";
-        $field['null'] = false;
+        $field['null'] = true;
         $field['unique'] = false;
 
         return $field;
