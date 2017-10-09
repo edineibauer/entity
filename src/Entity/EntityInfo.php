@@ -16,7 +16,18 @@ class EntityInfo
 
     public function __construct($entity)
     {
-        $this->entityName = $entity;
+        if($entity) {
+            $this->setEntityName($entity);
+        }
+    }
+
+    /**
+     * @param mixed $entityName
+     */
+    public function setEntityName($entityName)
+    {
+        $this->entityName = $entityName;
+        $this->loadStart();
     }
 
     /**

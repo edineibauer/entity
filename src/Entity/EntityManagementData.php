@@ -34,7 +34,7 @@ abstract class EntityManagementData
      */
     protected function setEntityArray(array $entity, array $entidadeStruct)
     {
-        $entity = !isset($entity[$this->table]) ? array($this->table => $entity) : $entity;
+        $entity = !isset($entity[$this->table]) || !is_array($entity[$this->table]) ? array($this->table => $entity) : $entity;
         $this->idData = $this->insertEntity($entity, $entidadeStruct);
         $this->showResponse();
     }
@@ -69,6 +69,7 @@ abstract class EntityManagementData
         $idRetorno = null;
 
         foreach ($entityDados as $table => $dados) {
+
             $id = $this->getPrimaryKeyValue($table, $dados);
             $dados = $this->validateDados($dados, $entityStruct, $id, $table);
 
@@ -92,6 +93,10 @@ abstract class EntityManagementData
             $create = new Create();
             foreach ($extend as $tableExtend => $ids) {
                 foreach ($ids as $id) {
+                    var_dump($table);
+                    var_dump($tableExtend);
+                    var_dump($idRetorno);
+                    var_dump($id);die;
                     $create->exeCreate(PRE . $table . "_" . $tableExtend, array($table."_id" => $idRetorno, $tableExtend."_id" => $id));
                 }
             }
@@ -212,9 +217,7 @@ abstract class EntityManagementData
     private function prepareInsertDataExtend($dados, $table)
     {
         $struct = new Entity($table);
-        $dados = !isset($dados[$table]) ? array($table => $dados) : $dados;
-
-        return $this->insertEntity($dados, $struct->getJsonStructEntity());
+        return $this->insertEntity(array($table => $dados), $struct->getJsonStructEntity());
     }
 
     private function checkTagsFieldDefined($fields, $column, $value, $table)
