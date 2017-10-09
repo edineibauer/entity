@@ -83,30 +83,20 @@ class Entity extends EntityCreateStorage
     private function getDadosFk($dados, $info, $struct, $table)
     {
         //extend and list busca dados
-        if(!empty($info['extend'])) {
-            foreach ($info['extend'] as $column) {
-                $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
+        foreach (array("extend", "list") as $list) {
+            if (!empty($info[$list])) {
+                foreach ($info[$list] as $column) {
+                    $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
+                }
             }
         }
 
-        //list busca dados
-        if(!empty($info['list'])) {
-            foreach ($info['list'] as $column) {
-                $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
-            }
-        }
-
-        //extend mult busca relações -> busca dados
-        if(!empty($info['extend_mult'])) {
-            foreach ($info['extend_mult'] as $column) {
-                $dados[$column][] = $this->readDataFromMultFk($column, $struct, $dados, $table);
-            }
-        }
-
-        //list mult busca relações -> busca dados
-        if(!empty($info['list_mult'])) {
-            foreach ($info['list_mult'] as $column) {
-                $dados[$column][] = $this->readDataFromMultFk($column, $struct, $dados, $table);
+        //extend and list mult busca relações -> busca dados
+        foreach (array("extend_mult", "list_mult") as $list) {
+            if(!empty($info[$list])) {
+                foreach ($info[$list] as $column) {
+                    $dados[$column] = $this->readDataFromMultFk($column, $struct, $dados, $table);
+                }
             }
         }
 
@@ -120,8 +110,11 @@ class Entity extends EntityCreateStorage
         $read->exeRead(PRE . $table . "_" . $struct[$column]['table'], "WHERE {$table}_id = :ti", "ti={$dados['id']}");
         if($read->getResult()) {
             foreach ($read->getResult() as $item) {
-                $result[] = $this->getDataEntity($item[$struct[$column]['table'] . "_id"], $struct[$column]['table']);
+                $result[$item[$struct[$column]['table'] . "_id"]] = $this->getDataEntity($item[$struct[$column]['table'] . "_id"], $struct[$column]['table']);
             }
+        } else {
+            $entity = new Entity($table);
+            $result[] = $entity->getJsonStructEntity();
         }
 
         return $result;
