@@ -106,6 +106,7 @@ class Entity extends EntityCreateStorage
     private function autoLoadInfo($data)
     {
         if ($data && is_array($data)) {
+            $uniques = [];
             foreach ($data as $column => $dados) {
                 switch ($dados['type']) {
                     case 'extend':
@@ -185,11 +186,15 @@ class Entity extends EntityCreateStorage
                         break;
                 }
                 $data[$column] = $this->checkTagsValuesDefault($data[$column], $column);
+                if($data[$column]['unique']) {
+                    $uniques[] = $column;
+                }
             }
 
             $dataInfo = array(
                 "title" => $this->title ?? null,
                 "image" => $this->image ?? null,
+                "unique" => $uniques,
                 "primary" => $this->primary ?? null,
                 "extend" => $this->extendData ?? null,
                 "extendMult" => $this->extendMultData ?? null,
