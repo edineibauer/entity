@@ -84,7 +84,7 @@ abstract class EntityCreateStorage extends EntityManagementData
                             }
 
                             if ($dados['key'] === "extend" || $dados['key'] === "list") {
-                                $this->createIndexFk($this->entityName, $column, 'id', $dados['table'], $dados['key_delete'], $dados['key_update']);
+                                $this->createIndexFk($this->entityName, $column, $dados['table'], $dados['key_delete'], $dados['key_update']);
                             } else {
                                 $this->createRelationalTable($column, $dados);
                             }
@@ -106,15 +106,15 @@ abstract class EntityCreateStorage extends EntityManagementData
 
         $this->exeSql($string);
 
-        $this->createIndexFk($table, $this->entityName."_id", $column, $this->entityName, $dados['key_delete'], $dados['key_update']);
-        $this->createIndexFk($table, $dados['table']."_id", 'id', $dados['table'], $dados['key_delete'], $dados['key_update']);
+        $this->createIndexFk($table, $this->entityName."_id", $this->entityName, $dados['key_delete'], $dados['key_update']);
+        $this->createIndexFk($table, $dados['table']."_id", $dados['table'], $dados['key_delete'], $dados['key_update']);
     }
 
-    private function createIndexFk($table, $column, $columnTarget, $tableTarget, $delete, $update)
+    private function createIndexFk($table, $column, $tableTarget, $delete, $update)
     {
         $exe = new SqlCommand();
         $exe->exeCommand("ALTER TABLE `" . parent::getPre($table) . "` ADD KEY `fk_{$column}` (`{$column}`)");
-        $exe->exeCommand("ALTER TABLE `" . parent::getPre($table) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $table) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($tableTarget) . "` (`" . $columnTarget . "`) ON DELETE " . strtoupper($delete) . " ON UPDATE " . strtoupper($update));
+        $exe->exeCommand("ALTER TABLE `" . parent::getPre($table) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $table) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($tableTarget) . "` (`id`) ON DELETE " . strtoupper($delete) . " ON UPDATE " . strtoupper($update));
     }
 
     private function prepareDefault($default)
