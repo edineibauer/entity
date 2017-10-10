@@ -70,8 +70,11 @@ abstract class EntityManagementData
 
         foreach ($entityDados as $table => $dados) {
 
-            $id = $this->getPrimaryKeyValue($table, $dados);
+            $info = new EntityInfo($table);
+            $info = $info->getJsonInfoEntity();
+            $id = $this->getPrimaryKeyValue($info, $dados);
             $dados = $this->validateDados($dados, $entityStruct, $id, $table);
+            $dados = $this->removeRelationalFields($dados, $info);
 
             if ($id['value']) {
                 $idRetorno = $this->updateTableDados($table, $dados, $id);
@@ -87,16 +90,25 @@ abstract class EntityManagementData
         return $idRetorno;
     }
 
+    private function removeRelationalFields($dados, $info)
+    {
+        foreach (array("list_mult", "extend_mult") as $list) {
+            if(!empty($info[$list])) {
+                foreach ($info[$list] as $column) {
+                    unset($dados[$column]);
+                }
+            }
+        }
+
+        return $dados;
+    }
+
     private function createRelationalInfo($table, $idRetorno, $extend = null)
     {
         if($extend && is_array($extend)) {
             $create = new Create();
             foreach ($extend as $tableExtend => $ids) {
                 foreach ($ids as $id) {
-                    var_dump($table);
-                    var_dump($tableExtend);
-                    var_dump($idRetorno);
-                    var_dump($id);die;
                     $create->exeCreate(PRE . $table . "_" . $tableExtend, array($table."_id" => $idRetorno, $tableExtend."_id" => $id));
                 }
             }
@@ -158,10 +170,8 @@ abstract class EntityManagementData
         return $newdados;
     }
 
-    private function getPrimaryKeyValue($table, $dados)
+    private function getPrimaryKeyValue($entityInfo, $dados)
     {
-        $entityInfo = new EntityInfo($table);
-        $entityInfo = $entityInfo->getJsonInfoEntity();
         if (isset($entityInfo['primary']) && !empty($entityInfo['primary']) && isset($dados[$entityInfo['primary']]) && !empty($dados[$entityInfo['primary']])) {
             $id['column'] = $entityInfo['primary'];
             $id['value'] = $dados[$entityInfo['primary']] ?? null;

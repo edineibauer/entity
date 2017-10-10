@@ -53,7 +53,7 @@ class Entity extends EntityCreateStorage
         $read = new Read();
         $read->exeRead(PRE . $table, "WHERE id = :id", "id={$id}");
 
-        return ($read->getResult() ? $this->getDadosFk($read->getResult()[0], $info, $struct, $table) : $struct);
+        return ($read->getResult() ? $this->getDadosFk($read->getResult()[0], $info, $struct, $table) : null);
     }
 
     /**
@@ -112,9 +112,6 @@ class Entity extends EntityCreateStorage
             foreach ($read->getResult() as $item) {
                 $result[$item[$struct[$column]['table'] . "_id"]] = $this->getDataEntity($item[$struct[$column]['table'] . "_id"], $struct[$column]['table']);
             }
-        } else {
-            $entity = new Entity($table);
-            $result[] = $entity->getJsonStructEntity();
         }
 
         return $result;
@@ -342,7 +339,7 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "extend_mult";
-        $field['null'] = true;
+        $field['null'] = false;
         $field['unique'] = true;
 
         return $field;
@@ -357,7 +354,7 @@ class Entity extends EntityCreateStorage
         $field['key_delete'] = "cascade";
         $field['key_update'] = "no action";
         $field['input'] = "list_mult";
-        $field['null'] = true;
+        $field['null'] = false;
         $field['unique'] = false;
 
         return $field;
