@@ -1,572 +1,424 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: nenab
- * Date: 22/08/2017
- * Time: 22:21
- */
 
 namespace Entity;
 
-use ConnCrud\Read;
-use Helpers\Check;
-use Helpers\Helper;
+use Helpers\Date;
+use Helpers\DateTime;
+use Helpers\Time;
 
-class Entity extends EntityCreateStorage
+class Entity
 {
-    private $entityName;
-    private $entityDados;
-    private $identificador;
+    private $entity;
+    private $data = [];
+    private $metadados;
     private $erro;
-
-    private $title;
-    private $primary;
-    private $image;
-    private $extendData;
-    private $extendMultData;
-    private $listData;
-    private $listMultData;
 
     public function __construct($entity)
     {
-        $this->entityName = $entity;
-        $this->identificador = 0;
-        $this->loadStart();
+        $this->entity = $entity;
+        $this->metadados = Metadados::getStruct($entity);
+        $this->setDefaultFieldsToEntity();
     }
 
-    public function insertDataEntity($arrayDataEntity)
+    /**
+     * @param string $erro
+     * @param int $line
+     * @param string $field
+     */
+    public function setErro(string $erro, int $line, string $field)
     {
-        if (is_array($arrayDataEntity)) {
-            $this->setEntityArray($arrayDataEntity, $this->entityDados);
-        } elseif (Check::json($arrayDataEntity)) {
-            $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
+        $this->erro[$field]['mensagem'] = $erro;
+        $this->erro[$field]['line'] = $line;
+    }
+
+    /**
+     * @param array $data
+     */
+    public function setData(array $data)
+    {
+        foreach ($data as $field => $value) {
+            $this->setDataToEntity($field, $value);
         }
     }
 
-    public function getDataEntity($id, $table = null) {
-        $table = $table ?? $this->entityName;
+    /**
+     * informa valor à um field
+     * @param string $field
+     * @param string $value
+     */
+    public function __set($field, $value)
+    {
+        $this->setDataToEntity($field, $value);
+    }
 
-        $info = new Entity($table);
-        $struct = $info->getJsonStructEntity();
-        $info = $info->getJsonInfoEntity();
-
-        $read = new Read();
-        $read->exeRead(PRE . $table, "WHERE id = :id", "id={$id}");
-
-        return ($read->getResult() ? $this->getDadosFk($read->getResult()[0], $info, $struct, $table) : null);
+    /**
+     * @return array
+     */
+    public function getData(): array
+    {
+        return $this->getDataOnly();
     }
 
     /**
      * @return mixed
      */
-    public function getErroEntity()
+    public function getEntity()
+    {
+        return $this->entity;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getErro()
     {
         return $this->erro;
     }
 
     /**
-     * @return array
+     * obtem valor de um field
+     * @param string $field
+     * @return mixed
      */
-    public function getJsonStructEntity()
+    public function __get(string $field)
     {
-        return $this->entityDados;
+        return $this->data[$field] ?? null;
     }
 
     /**
-     * @return array
+     * @param mixed $field
+     * @param mixed $value
      */
-    public function getJsonInfoEntity(): array
+    private function setDataToEntity($field, $value)
     {
-        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '_info.json'), true);
+        try {
+            if (!is_string($field)) {
+                throw new \Exception("Esperava um field string, outro valor informado.");
+            }
+            if (array_key_exists($field, $this->data)) {
+                $this->data[$field] = $this->checkValueField($value, $this->metadados[$field], $this->data[$field]);
+            }
+        } catch (\Exception $e) {
+            $this->setErro($e->getMessage(), $e->getLine(), $field);
+        }
     }
 
-    private function getDadosFk($dados, $info, $struct, $table)
+    /**
+     * converte o dado em seu tipo
+     * @param mixed $value
+     * @param array $metadados
+     * @param mixed $currentValue
+     * @return mixed
+     */
+    private function checkValueField($value, array $metadados, $currentValue = null)
     {
-        //extend and list busca dados
-        foreach (array("extend", "list") as $list) {
-            if (!empty($info[$list])) {
-                foreach ($info[$list] as $column) {
-                    $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
+        try {
+            if ($metadados['null'] && empty($value)) {
+                $value = null;
+
+            } elseif (!$metadados['null'] && empty($value)) {
+                $value = $currentValue;
+
+            } else {
+                $value = $this->checkType($value, $metadados);
+                $value = $this->checkSize($value, $metadados['type'], $metadados['key'], $metadados['title'], $metadados['size']);
+
+                if (empty($value)) {
+                    $value = $currentValue;
+                } else {
+
+                    if (!empty($metadados['allow']) && is_array($metadados['allow']) && !in_array($value, $metadados['allow'])) {
+                        throw new \Exception($metadados['title'] . " não possue um dos valores permitidos. [" . implode(', ', $metadados['allow']) . "]");
+                    }
+
+                    if (!empty($metadados['regular']) && !preg_match("/" . preg_quote($metadados['regular']) . "/i", $value)) {
+                        throw new \Exception($metadados['title'] . " não obedeceu o formato desejado");
+                    }
                 }
             }
+
+        } catch (\Exception $e) {
+            $value = $currentValue;
+            $this->setErro($e->getMessage(), $e->getLine(), $metadados['column']);
         }
 
-        //extend and list mult busca relações -> busca dados
-        foreach (array("extend_mult", "list_mult") as $list) {
-            if(!empty($info[$list])) {
-                foreach ($info[$list] as $column) {
-                    $dados[$column] = $this->readDataFromMultFk($column, $struct, $dados, $table);
-                }
-            }
-        }
-
-        return $dados;
+        return $value;
     }
 
-    private function readDataFromMultFk($column, $struct, $dados, $table)
+    /**
+     * Verifica o tipo de valor a ser inserido no field da entity
+     * transformando o valor no tipo esperado.
+     * @param mixed $value
+     * @param array $metadados
+     * @return mixed
+     * @throws \Exception
+     */
+    private function checkType($value, array $metadados)
     {
-        $result = null;
-        $read = new Read();
-        $read->exeRead(PRE . $table . "_" . $struct[$column]['table'], "WHERE {$table}_id = :ti", "ti={$dados['id']}");
-        if($read->getResult()) {
-            foreach ($read->getResult() as $item) {
-                $result[$item[$struct[$column]['table'] . "_id"]] = $this->getDataEntity($item[$struct[$column]['table'] . "_id"], $struct[$column]['table']);
+        $type = $metadados['type'];
+        $title = $metadados['title'];
+
+        if (in_array($metadados['key'], array("extend", "extend_mult", "list", "list_mult"))) {
+
+            if (in_array($metadados['key'], array("extend_mult", "list_mult"))) {
+                $value = $this->checkDataforFkMult($value, $title, $metadados);
+            } else {
+                $value = $this->checkDataforFk($value, $title, $metadados);
             }
-        }
-
-        return $result;
-    }
-
-    private function loadStart()
-    {
-        if (file_exists(PATH_HOME . "entity/cache/" . $this->entityName . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '.json'), true);
-
-        } elseif (file_exists(PATH_HOME . "entity/" . $this->entityName . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "entity/" . $this->entityName . '.json'));
-
         } else {
-            Helper::createFolderIfNoExist(PATH_HOME . "entity");
-            $this->erro = "as entidades devem ficar na pasta 'entity/' e no formato json";
-        }
-    }
-
-    private function loadEntityByJsonString($json, $worked = false)
-    {
-        if (!$worked && !$this->erro) {
-
-            $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
-            $this->createCache($this->entityName, $this->entityDados);
-            parent::createStorageEntity($this->entityName, $this->entityDados);
-
-        } else if (!$this->erro) {
-
-            parent::setTable($this->entityName);
-            $this->entityDados = json_decode($json, true);
-        }
-    }
-
-    private function createCache(string $nome, array $data)
-    {
-        Helper::createFolderIfNoExist(PATH_HOME . "entity/cache");
-        $fp = fopen(PATH_HOME . "entity/cache/" . $nome . '.json', "w");
-        fwrite($fp, json_encode($data));
-        fclose($fp);
-    }
-
-    private function autoLoadInfo($data)
-    {
-        if ($data && is_array($data)) {
-            $uniques = [];
-            foreach ($data as $column => $dados) {
-                switch ($dados['type']) {
-                    case 'extend':
-                        $data[$column] = $this->extend($data[$column], $column);
-                        break;
-                    case 'extend_mult':
-                        $data[$column] = $this->extendMultiple($data[$column], $column);
-                        break;
-                    case 'list':
-                        $data[$column] = $this->list($data[$column], $column);
-                        break;
-                    case 'list_mult':
-                        $data[$column] = $this->listMultiple($data[$column], $column);
-                        break;
-                    case 'pri':
-                        $data[$column] = $this->inputPrimary($data[$column], $column);
-                        break;
-                    case 'int':
-                        $data[$column] = $this->inputInt($data[$column]);
-                        break;
-                    case 'tinyint':
-                        $data[$column] = $this->inputTinyint($data[$column]);
-                        break;
-                    case 'title':
-                        $data[$column] = $this->inputTitle($column, $data[$column]);
-                        break;
-                    case 'link':
-                        $data[$column] = $this->inputLink($data, $column);
-                        break;
-                    case 'date':
-                        $data[$column] = $this->inputDate($data, $column);
-                        break;
-                    case 'datetime':
-                        $data[$column] = $this->inputDateTime($data, $column);
-                        break;
-                    case 'time':
-                        $data[$column] = $this->inputTime($data, $column);
-                        break;
-                    case 'week':
-                        $data[$column] = $this->inputWeek($data, $column);
-                        break;
-                    case 'cover':
-                        $data[$column] = $this->inputCover($data[$column]);
-                        break;
-                    case 'email':
-                        $data[$column] = $this->inputEmail($data[$column]);
-                        break;
-                    case 'password':
-                        $data[$column] = $this->inputPassword($data[$column]);
-                        break;
-                    case 'status':
-                        $data[$column] = $this->inputStatus($data[$column]);
-                        break;
-                    case 'text':
-                        $data[$column] = $this->inputText($data[$column]);
-                        break;
-                    case 'textarea':
-                        $data[$column] = $this->inputTextArea($data[$column]);
-                        break;
-                    case 'on':
-                        $data[$column] = $this->inputOn($data[$column]);
-                        break;
-                    case 'select':
-                        $data[$column] = $this->inputSelect($data[$column]);
-                        break;
-                    case 'valor':
-                        $data[$column] = $this->inputValor($data[$column]);
-                        break;
-                    case 'float':
-                        $data[$column] = $this->inputFloat($data[$column]);
-                        break;
-                    case 'cpf':
-                        $data[$column] = $this->inputCpf($data[$column]);
-                        break;
-                    case 'cnpj':
-                        $data[$column] = $this->inputCnpj($data[$column]);
-                        break;
-                }
-                $data[$column] = $this->checkTagsValuesDefault($data[$column], $column);
-                if($data[$column]['unique']) {
-                    $uniques[] = $column;
-                }
+            if (is_array($value) || is_object($value)) {
+                throw new \Exception($title . " esperava um valor, não um array ou objeto");
             }
 
-            $dataInfo = array(
-                "title" => $this->title ?? null,
-                "image" => $this->image ?? null,
-                "unique" => $uniques,
-                "primary" => $this->primary ?? null,
-                "extend" => $this->extendData ?? null,
-                "extend_mult" => $this->extendMultData ?? null,
-                "list" => $this->listData ?? null,
-                "list_mult" => $this->listMultData ?? null,
-            );
-            $this->createCache($this->entityName . "_info", $dataInfo);
+            if (in_array($type, array("float", "real", "double"))) {
+                if (!is_numeric($value)) {
+                    throw new \Exception($title . " esperava um valor float.");
+                }
+                $value = (float)$value;
+
+            } elseif (in_array($type, array("tinyint", "int", "mediumint", "longint", "bigint"))) {
+                if (!is_numeric($value)) {
+                    if(is_bool($value)) {
+                        $value = $value ? 1 : 0;
+                    } else {
+                        throw new \Exception($title . " esperava um valor inteiro.");
+                    }
+                }
+                $value = (int)$value;
+
+            } elseif (in_array($type, array("bool", "boolean"))) {
+                if (!is_bool($value)) {
+                    if (is_numeric($value)) {
+                        $value = $value < 1 ? false : true;
+                    } elseif (is_null($value)) {
+                        $value = false;
+                    } elseif (is_string($value)) {
+                        $value = true;
+                    } else {
+                        throw new \Exception($title . " esperava um valor boleano.");
+                    }
+                }
+                $value = (bool)$value;
+
+            } elseif($type === "date") {
+                $data = new Date();
+                $value = $data->getDate($value);
+
+            } elseif($type === "time") {
+                $data = new Time();
+                $value = $data->getTime($value);
+
+            } elseif($type === "datetime") {
+                $data = new DateTime();
+                $value = $data->getDateTime($value);
+
+            } else {
+                $value = (string)$value;
+            }
         }
 
+        return $value;
+    }
+
+    /**
+     * Aplica os campos que a entidade tem, isso evita novas entradas,
+     * limitando os fields utilizados aos fields da entity
+     */
+    private function setDefaultFieldsToEntity()
+    {
+        foreach ($this->metadados as $field => $metadados) {
+            $this->data[$field] = $this->checkDefault($metadados['default']);
+        }
+    }
+
+    /**
+     * Aplica os valores padrões de cada field da entidade,
+     * para quando não há valor
+     * @param mixed $default
+     * @return mixed
+     */
+    private function checkDefault($default)
+    {
+        if (!is_string($default)) {
+            return $default;
+
+        } elseif (!empty($default)) {
+            switch ($default) {
+                case "datetime":
+                    return date("Y-m-d H:i:s");
+                    break;
+                case "date":
+                    return date("Y-m-d");
+                    break;
+                case "time":
+                    return date("H:i:s");
+                    break;
+                default:
+                    return $default;
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Valida o tamanho do valor a ser inserido em um field da entity,
+     * evitando assim campos fora do tamanho desejado.
+     * @param mixed $value
+     * @param string $type
+     * @param mixed $size
+     * @param mixed $key
+     * @param string $title
+     * @return mixed
+     * @throws \Exception
+     */
+    private function checkSize($value, string $type, string $key, string $title, $size = null)
+    {
+        if (!in_array($key, array("list", "list_mult", "extend", "extend_mult"))) {
+            $text = ["char" => $size ?? 1, "tinytext" => $size ?? 255, "text" => $size ?? 65535, "mediumtext" => $size ?? 16777215, "longtext" => $size ?? 4294967295, "varchar" => $size];
+            $int = ["tinyint" => $size ?? 4, "smallint" => $size ?? 8, "mediumint" => $size ?? 12, "int" => $size ?? 16, "bigint" => $size ?? 32];
+
+            if (array_key_exists($type, $text)) {
+                if (strlen($value) > $text[$type]) {
+                    $value = substr($value, 0, $size);
+                }
+
+            } elseif (array_key_exists($type, $int)) {
+                if ($value > (pow(2, ($int[$type] * 2)) - 1)) {
+                    throw new \Exception($title . " deve ser menor que " . (pow(2, ($int[$type] * 2)) - 1) . ".");
+                }
+            }
+        }
+
+        return $value;
+    }
+
+    private function getDataOnly()
+    {
+        $data = null;
+        foreach ($this->data as $field => $value) {
+            try {
+                if (in_array($this->metadados[$field]['key'], array('extend_mult', 'list_mult', 'list', 'extend'))) {
+                    $data[$field] = $this->checkObjectEntity($value, $field);
+                } else {
+                    $data[$field] = $value;
+                }
+            } catch (\Exception $e) {
+                $this->setErro($e->getMessage(), $e->getLine(), $field);
+            }
+        }
 
         return $data;
     }
 
-    private function checkTagsValuesDefault($field, $column)
+    /**
+     * @param mixed $objeto
+     * @param string $field
+     * @param bool $recursivo
+     * @return mixed
+     * @throws \Exception $e
+     */
+    private function checkObjectEntity($objeto, string $field, bool $recursivo = false)
     {
-        $field['column'] = $column;
-        $field['title'] = $this->prepareColumnName($column);
-        $field['class'] = $field['class'] ?? "";
-        $field['null'] = $field['null'] ?? true;
-        $field['edit'] = $field['edit'] ?? true;
-        $field['list'] = $field['list'] ?? true;
-        $field['update'] = $field['update'] ?? true;
-        $field['unique'] = $field['unique'] ?? false;
-        $field['indice'] = $field['indice'] ?? false;
-        $field["size"] = $field["size"] ?? "";
-        $field["allow"] = $field["allow"] ?? "";
-        $field["allowRelation"] = $field["allowRelation"] ?? "";
-        $field["default"] = $field["default"] ?? "";
-        $field["table"] = $field["table"] ?? "";
-        $field["col"] = $field["col"] ?? "row";
-        $field["class"] = $field["class"] ?? "";
-        $field["style"] = $field["style"] ?? "";
-        $field["regular"] = $field["regular"] ?? "";
-        $field["prefixo"] = $field["prefixo"] ?? "";
-        $field["sulfixo"] = $field["sulfixo"] ?? "";
-        $field['key'] = $field['key'] ?? "";
-        if(isset($field['identificador'])) {
-            $this->identificador = $field['identificador'] > $this->identificador ? $field['identificador'] : $this->identificador;
-        } else {
-            $field['identificador'] = $this->identificador;
-        }
-        $this->identificador ++;
-
-        if($field['unique']) {
-            $field['null'] = false;
+        if (is_null($objeto)) {
+            return null;
+        } elseif (is_array($objeto)) {
+            if ($recursivo) {
+                throw new \Exception($this->metadados[$field]['title'] . " esperava um objeto Entity, mas foi encontrado um array.");
+            } else {
+                $dados = null;
+                foreach ($objeto as $item) {
+                    $dados[] = $this->checkObjectEntity($item, $field, true);
+                }
+                return $dados;
+            }
+        } elseif (is_object($objeto) && is_a($objeto, "Entity\Entity")) {
+            return $objeto->getData();
         }
 
-        return $field;
+        throw new \Exception($this->metadados[$field]['title'] . " esperava um objeto Entity.");
     }
 
-    private function extend($field, $column)
+
+    /**
+     * @param mixed $value
+     * @param string $title
+     * @param array $metadados
+     * @return mixed
+     * @throws \Exception
+     */
+    private function checkDataforFkMult($value, string $title, array $metadados)
     {
-        $this->extendData[] = $column;
-        $field['type'] = "int";
-        $field['size'] = 11;
-        $field['key'] = "extend";
-        $field['key_delete'] = "cascade";
-        $field['key_update'] = "no action";
-        $field['input'] = "extend";
-        $field['null'] = false;
-        $field['unique'] = true;
-
-        return $field;
-    }
-
-    private function list($field, $column)
-    {
-        $this->listData[] = $column;
-        $field['type'] = "int";
-        $field['size'] = 11;
-        $field['key'] = "list";
-        $field['key_delete'] = "no action";
-        $field['key_update'] = "no action";
-        $field['input'] = "list";
-        $field['null'] = $field['null'] ?? true;
-        $field['unique'] = false;
-
-        if (isset($field['tag']) && ((is_array($field['tag']) && in_array("image", $field['tag'])) || $field['tag'] === "image")) {
-            $this->image = $column;
+        if (!is_array($value)) {
+            return array(0 => $this->checkDataforFk($value, $title, $metadados));
         }
 
-        return $field;
+        $data = [];
+        $indice = 0;
+        foreach ($value as $i => $item) {
+            if ($i !== $indice) {
+                return array(0 => $this->checkDataforFk($value, $title, $metadados));
+            }
+
+            try {
+                $data[] = $this->checkDataforFk($item, $title, $metadados);
+            } catch (\Exception $ex) {
+                $this->setErro($ex->getMessage(), $ex->getLine(), $metadados['column']);
+            }
+
+            $indice++;
+        }
+        return $data;
     }
 
-    private function extendMultiple($field, $column)
+    /**
+     * @param mixed $value
+     * @param string $title
+     * @param array $metadados
+     * @return mixed
+     * @throws \Exception $e
+     */
+    private function checkDataforFk($value, string $title, array $metadados)
     {
-        $this->extendMultData[] = $column;
-        $field['type'] = "int";
-        $field['size'] = 11;
-        $field['key'] = "extend_mult";
-        $field['key_delete'] = "cascade";
-        $field['key_update'] = "no action";
-        $field['input'] = "extend_mult";
-        $field['null'] = false;
-        $field['unique'] = true;
+        if (is_null($value)) {
+            return null;
+        } elseif (is_array($value)) {
+            $obj = new Entity($metadados['table']);
+            $obj->setData($value);
+            if ($obj->getErro()) {
+                throw new \Exception("Esperava um objeto Entity válido. " . PHP_EOL . $this->erroToString($obj->getErro()));
+            }
+            return $obj;
 
-        return $field;
+        } elseif (is_numeric($value)) {
+            return $this->getEntityFromId($value, $metadados['table']);
+
+        } elseif (!is_object($value) || !is_a($value, "Entity\Entity") || $metadados['table'] !== $value->getEntity()) {
+            throw new \Exception($title . " esperava um Objeto Entity -> {$metadados['table']}.");
+        }
+
+        return $value;
     }
 
-    private function listMultiple($field, $column)
+    private function erroToString(array $erro) :string
     {
-        $this->listMultData[] = $column;
-        $field['type'] = "int";
-        $field['size'] = 11;
-        $field['key'] = "list_mult";
-        $field['key_delete'] = "cascade";
-        $field['key_update'] = "no action";
-        $field['input'] = "list_mult";
-        $field['null'] = false;
-        $field['unique'] = false;
+        $string = "";
+        foreach ($erro as $field => $dados) {
+            $string .= "Erro: {$field} => {$dados['mensagem']} #line {$dados['line']}" . PHP_EOL;
+        }
 
-        return $field;
+        return $string;
     }
 
-    private function inputPrimary($field, $column)
+    /**
+     * @param int $id
+     * @param string $table
+     * @return Entity
+     */
+    private function getEntityFromId(int $id, string $table): Entity
     {
-        $field['type'] = "int";
-        $field['size'] = 11;
-        $field['null'] = false;
-        $field['key'] = "primary";
-        $field['input'] = "hidden";
-        $field['update'] = false;
-        $field['list'] = $field['list'] ?? false;
-        $this->primary = $column;
-
-        return $field;
-    }
-
-    private function inputText($field)
-    {
-        $field['type'] = "varchar";
-        $field['input'] = "text";
-
-        return $field;
-    }
-
-    private function inputTextArea($field)
-    {
-        $field['type'] = "text";
-        $field['input'] = "textarea";
-
-        return $field;
-    }
-
-    private function inputInt($field)
-    {
-        $field['size'] = $field['size'] ?? 11;
-        $field['input'] = "int";
-
-        return $field;
-    }
-
-    private function inputTinyint($field)
-    {
-        $field['size'] = $field['size'] ?? 1;
-        $field['input'] = "int";
-
-        return $field;
-    }
-
-    private function inputTitle($column, $field)
-    {
-        $field['type'] = "varchar";
-        $field['size'] = $field['size'] ?? 127;
-        $field['null'] = $field['null'] ?? false;
-        $field['unique'] = $field['unique'] ?? true;
-        $field['class'] = "font-size20 font-bold";
-        $field['tag'] = "title";
-        $field['list'] = true;
-        $field['input'] = "text";
-        $this->title = $column;
-
-        return $field;
-    }
-
-    private function inputLink($data, $field)
-    {
-        $data[$field]['link'] = $data[$field]['link'] ?? $this->title;
-        $data[$field]['type'] = $data[$this->title]['type'] ?? "varchar";
-        $data[$field]['size'] = $data[$field]['size'] ?? $data[$this->title]['size'];
-        $data[$field]['null'] = false;
-        $data[$field]['unique'] = true;
-        $data[$field]['class'] = "font-size08";
-        $data[$field]['tag'] = "link";
-        $data[$field]['input'] = "link";
-
-        return $data[$field];
-    }
-
-    private function inputDate($data, $field)
-    {
-        $data[$field]['input'] = "date";
-        $data[$field]['default'] = $data[$field]['default'] ?? "date";
-
-        return $data[$field];
-    }
-
-    private function inputDateTime($data, $field)
-    {
-        $data[$field]['input'] = "datetime";
-        $data[$field]['default'] = $data[$field]['default'] ?? "datetime";
-
-        return $data[$field];
-    }
-
-    private function inputTime($data, $field)
-    {
-        $data[$field]['input'] = "time";
-        $data[$field]['default'] = $data[$field]['default'] ?? "time";
-
-        return $data[$field];
-    }
-
-    private function inputWeek($data, $field)
-    {
-        $data[$field]['input'] = "week";
-
-        return $data[$field];
-    }
-
-    private function inputEmail($field)
-    {
-        $field['type'] = 'varchar';
-        $field['size'] = 127;
-        $field['input'] = "email";
-        $field['validade'] = "email";
-
-        return $field;
-    }
-
-    private function inputPassword($field)
-    {
-        $field['type'] = 'varchar';
-        $field['size'] = $field['size'] ?? 255;
-        $field['null'] = false;
-        $field['input'] = "password";
-
-        return $field;
-    }
-
-    private function inputCover($field)
-    {
-        $field['type'] = 'varchar';
-        $field['size'] = 255;
-        $field['null'] = false;
-        $field['unique'] = true;
-        $field['input'] = "image";
-        $field['list'] = $field['list'] ?? true;
-
-        return $field;
-    }
-
-    private function inputStatus($field)
-    {
-        $field['type'] = 'tinyint';
-        $field['size'] = 1;
-        $field['null'] = false;
-        $field['allow'] = [0, 1];
-        $field["relation"] = [0 => "desativado", 1 => "ativo"];
-        $field['input'] = "on";
-        $field['default'] = $field['default'] ?? 0;
-
-        return $field;
-    }
-
-    private function inputOn($field)
-    {
-        $field['type'] = 'tinyint';
-        $field['size'] = 1;
-        $field['null'] = false;
-        $field['allow'] = [0, 1];
-        $field['input'] = "on";
-        $field['default'] = $field['default'] ?? 0;
-
-        return $field;
-    }
-
-    private function inputSelect($field)
-    {
-        $field['type'] = 'int';
-        $field['input'] = "select";
-
-        return $field;
-    }
-
-    private function inputValor($field)
-    {
-        $field['type'] = 'double';
-        $field['input'] = "valor";
-
-        return $field;
-    }
-
-    private function inputFloat($field)
-    {
-        $field['type'] = 'float';
-        $field['input'] = "float";
-
-        return $field;
-    }
-
-    private function inputCpf($field)
-    {
-        $field['type'] = 'varchar';
-        $field['input'] = "cpf";
-        $field['size'] = 11;
-
-        return $field;
-    }
-
-    private function inputCnpj($field)
-    {
-        $field['type'] = 'varchar';
-        $field['input'] = "cnpj";
-        $field['size'] = 14;
-
-        return $field;
-    }
-
-    private function prepareColumnName($column)
-    {
-        return trim(ucwords(str_replace(array('_', '-'), ' ', $column)));
+        $objData = new DataBase($table);
+        return $objData->get($id);
     }
 }
