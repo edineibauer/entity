@@ -344,7 +344,7 @@ class DataBase
                 if(!empty($column) && !in_array($data->getMetadados()['struct'][$column]['key'], array('primary', 'list', 'list_mult', 'extend', 'extend_mult'))) {
                     if (is_string($data->get($column))) {
                         $valor = $data->get($column);
-                        $valor = (preg_match('/-cp--\d{1,4}/i', $valor) ? explode('-cp--', $valor)[0] : $valor) . "-cp--" . rand(1, 1000) . date("s") . date("i");
+                        $valor = (preg_match('/-cpy-\d{1,4}/i', $valor) ? explode('-cpy-', $valor)[0] : $valor) . "-cpy-" . rand(1, 1000) . date("s") . date("i");
                         $data->set($column, $valor);
 
                     } elseif (is_numeric($data->get($column))) {
