@@ -1,26 +1,22 @@
 <?php
 
-/**
- * <b>CreateTable:</b>
- * Obtem um arquivo JSON e o cria a tabela relacionada a ele
- *
- * @copyright (c) 2017, Edinei J. Bauer
- */
-
 namespace Entity;
 
 use ConnCrud\SqlCommand;
 
-abstract class EntityCreateStorage extends EntityManagementData
+class CreateEntityStorage
 {
     private $entityName;
     private $data;
 
-    protected function createStorageEntity($entityName, $data)
+    /**
+     * @param string $entityName
+     * @param array $data
+    */
+    public function __construct(string $entityName, array $data)
     {
         $this->entityName = $entityName;
         $this->data = $data;
-        parent::setTable($this->entityName);
 
         if (!$this->existEntityStorage($entityName)) {
             $this->prepareCommandToCreateTable();
@@ -31,7 +27,7 @@ abstract class EntityCreateStorage extends EntityManagementData
     private function existEntityStorage($entity)
     {
         $sqlTest = new SqlCommand();
-        $sqlTest->exeCommand("SHOW TABLES LIKE '" . parent::getPre($entity) . "'");
+        $sqlTest->exeCommand("SHOW TABLES LIKE '" . $this->getPre($entity) . "'");
 
         return $sqlTest->getRowCount() > 0;
     }
@@ -42,7 +38,7 @@ abstract class EntityCreateStorage extends EntityManagementData
         if ($this->data && is_array($this->data)) {
             foreach ($this->data as $column => $dados) {
                 if ($this->notIsMult($dados['key'] ?? null)) {
-                    $string .= (empty($string) ? "CREATE TABLE IF NOT EXISTS `" . parent::getPre($this->entityName) . "` (" : ", ")
+                    $string .= (empty($string) ? "CREATE TABLE IF NOT EXISTS `" . $this->getPre($this->entityName) . "` (" : ", ")
                         . "`{$column}` {$dados['type']}" . (isset($dados['size']) && !empty($dados['size']) ? "({$dados['size']}) " : " ")
                         . (!$dados['null'] ? "NOT NULL " : "")
                         . (isset($dados['default']) && !empty($dados['default']) ? $this->prepareDefault($dados['default']) : ($dados['null'] ? "DEFAULT NULL" : ""));
@@ -74,7 +70,7 @@ abstract class EntityCreateStorage extends EntityManagementData
 
                 if (!empty($dados['key'])) {
                     if ($dados['key'] === "primary") {
-                        $this->exeSql("ALTER TABLE `" . parent::getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
+                        $this->exeSql("ALTER TABLE `" . $this->getPre($this->entityName) . "` ADD PRIMARY KEY (`{$column}`), MODIFY `{$column}` int(11) NOT NULL AUTO_INCREMENT");
 
                     } elseif (in_array($dados['key'], array("extend", "extend_mult", "list", "list_mult"))) {
 
@@ -99,7 +95,7 @@ abstract class EntityCreateStorage extends EntityManagementData
     {
         $table = $this->entityName . "_" . $dados['table'];
 
-        $string = "CREATE TABLE IF NOT EXISTS `" . parent::getPre($table) . "` ("
+        $string = "CREATE TABLE IF NOT EXISTS `" . $this->getPre($table) . "` ("
             . "`{$this->entityName}_id` INT(11) NOT NULL,"
             . "`{$dados['table']}_id` INT(11) NOT NULL"
             . ") ENGINE=InnoDB DEFAULT CHARSET=utf8";
@@ -113,8 +109,8 @@ abstract class EntityCreateStorage extends EntityManagementData
     private function createIndexFk($table, $column, $tableTarget, $delete, $update)
     {
         $exe = new SqlCommand();
-        $exe->exeCommand("ALTER TABLE `" . parent::getPre($table) . "` ADD KEY `fk_{$column}` (`{$column}`)");
-        $exe->exeCommand("ALTER TABLE `" . parent::getPre($table) . "` ADD CONSTRAINT `" . parent::getPre($column . "_" . $table) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . parent::getPre($tableTarget) . "` (`id`) ON DELETE " . strtoupper($delete) . " ON UPDATE " . strtoupper($update));
+        $exe->exeCommand("ALTER TABLE `" . $this->getPre($table) . "` ADD KEY `fk_{$column}` (`{$column}`)");
+        $exe->exeCommand("ALTER TABLE `" . $this->getPre($table) . "` ADD CONSTRAINT `" . $this->getPre($column . "_" . $table) . "` FOREIGN KEY (`{$column}`) REFERENCES `" . $this->getPre($tableTarget) . "` (`id`) ON DELETE " . strtoupper($delete) . " ON UPDATE " . strtoupper($update));
     }
 
     private function prepareDefault($default)
@@ -133,5 +129,10 @@ abstract class EntityCreateStorage extends EntityManagementData
     {
         $exe = new SqlCommand();
         $exe->exeCommand($sql);
+    }
+
+    private function getPre(string $table): string
+    {
+        return (defined("PRE") && !preg_match("/^" . PRE . "/i", $table) ? PRE : "") . $table;
     }
 }

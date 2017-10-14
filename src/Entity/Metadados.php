@@ -2,72 +2,27 @@
 
 namespace Entity;
 
-class Metadados
+use Helpers\Helper;
+
+class Metadados extends CreateEntityStorage
 {
-    private $entityName;
-    private $entityDados;
-    private $identificador;
-    private $erro;
-
-    private $title;
-    private $primary;
-    private $image;
-    private $extendData;
-    private $extendMultData;
-    private $listData;
-    private $listMultData;
-
-    public function __construct($entity)
-    {
-        $this->entityName = $entity;
-        $this->identificador = 0;
-        $this->loadStart();
-    }
-
-    public function insertDataEntity($arrayDataEntity)
-    {
-        if (is_array($arrayDataEntity)) {
-            $this->setEntityArray($arrayDataEntity, $this->entityDados);
-        } elseif (Check::json($arrayDataEntity)) {
-            $this->setEntityArray(json_decode($arrayDataEntity, true), $this->entityDados);
-        }
-    }
-
-    public function getDataEntity($id, $table = null) {
-        $table = $table ?? $this->entityName;
-
-        $info = new Entity($table);
-        $struct = $info->getJsonStructEntity();
-        $info = $info->getJsonInfoEntity();
-
-        $read = new Read();
-        $read->exeRead(PRE . $table, "WHERE id = :id", "id={$id}");
-
-        return ($read->getResult() ? $this->getDadosFk($read->getResult()[0], $info, $struct, $table) : null);
-    }
+    private static $erro;
 
     /**
      * @return mixed
      */
     public function getErroEntity()
     {
-        return $this->erro;
-    }
-
-    /**
-     * @return array
-     */
-    public function getJsonStructEntity()
-    {
-        return $this->entityDados;
+        return self::$erro;
     }
 
     /**
      * @param string $entity
      * @return array
      */
-    public static function getStructInfo(string $entity) :array
+    public static function getStructInfo(string $entity): array
     {
+        self::checkLoad($entity);
         return array("struct" => self::getStruct($entity), "info" => self::getInfo($entity));
     }
 
@@ -75,8 +30,9 @@ class Metadados
      * @param string $entity
      * @return array
      */
-    public static function getStruct($entity) :array
+    public static function getStruct($entity): array
     {
+        self::checkLoad($entity);
         return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true);
     }
 
@@ -84,217 +40,182 @@ class Metadados
      * @param string $entity
      * @return array
      */
-    public static function getFields($entity) :array
+    public static function getInfo($entity): array
     {
-        return array_keys(json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true));
+        self::checkLoad($entity);
+        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '_info.json'), true);
     }
 
     /**
      * @param string $entity
      * @return array
      */
-    public static function getInfo($entity) :array
+    public static function getFields($entity): array
     {
-        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '_info.json'), true);
+        self::checkLoad($entity);
+        return array_keys(json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true));
     }
 
-    /**
-     * @return array
-     */
-    public function getJsonInfoEntity(): array
+    private static function checkLoad(string $entity)
     {
-        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '_info.json'), true);
-    }
+        if (!file_exists(PATH_HOME . "entity/cache/" . $entity . '.json') && file_exists(PATH_HOME . "entity/" . $entity . '.json')) {
 
-    private function getDadosFk($dados, $info, $struct, $table)
-    {
-        //extend and list busca dados
-        foreach (array("extend", "list") as $list) {
-            if (!empty($info[$list])) {
-                foreach ($info[$list] as $column) {
-                    $dados[$column] = $this->getDataEntity($dados[$column], $struct[$column]['table']);
-                }
-            }
-        }
-
-        //extend and list mult busca relações -> busca dados
-        foreach (array("extend_mult", "list_mult") as $list) {
-            if(!empty($info[$list])) {
-                foreach ($info[$list] as $column) {
-                    $dados[$column] = $this->readDataFromMultFk($column, $struct, $dados, $table);
-                }
-            }
-        }
-
-        return $dados;
-    }
-
-    private function readDataFromMultFk($column, $struct, $dados, $table)
-    {
-        $result = null;
-        $read = new Read();
-        $read->exeRead(PRE . $table . "_" . $struct[$column]['table'], "WHERE {$table}_id = :ti", "ti={$dados['id']}");
-        if($read->getResult()) {
-            foreach ($read->getResult() as $item) {
-                $result[$item[$struct[$column]['table'] . "_id"]] = $this->getDataEntity($item[$struct[$column]['table'] . "_id"], $struct[$column]['table']);
-            }
-        }
-
-        return $result;
-    }
-
-    private function loadStart()
-    {
-        if (file_exists(PATH_HOME . "entity/cache/" . $this->entityName . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "entity/cache/" . $this->entityName . '.json'), true);
-
-        } elseif (file_exists(PATH_HOME . "entity/" . $this->entityName . '.json')) {
-            $this->loadEntityByJsonString(file_get_contents(PATH_HOME . "entity/" . $this->entityName . '.json'));
+            self::autoLoadInfo($entity);
 
         } else {
             Helper::createFolderIfNoExist(PATH_HOME . "entity");
-            $this->erro = "as entidades devem ficar na pasta 'entity/' e no formato json";
+            self::$erro = "não foi possível encontrar a entidade na pasta 'entity/' no formato json";
+
         }
     }
 
-    private function loadEntityByJsonString($json, $worked = false)
-    {
-        if (!$worked && !$this->erro) {
-
-            $this->entityDados = $this->autoLoadInfo(json_decode($json, true));
-            $this->createCache($this->entityName, $this->entityDados);
-            parent::createStorageEntity($this->entityName, $this->entityDados);
-
-        } else if (!$this->erro) {
-
-            parent::setTable($this->entityName);
-            $this->entityDados = json_decode($json, true);
-        }
-    }
-
-    private function createCache(string $nome, array $data)
+    private static function createCache(string $entity, array $data)
     {
         Helper::createFolderIfNoExist(PATH_HOME . "entity/cache");
-        $fp = fopen(PATH_HOME . "entity/cache/" . $nome . '.json', "w");
+        $fp = fopen(PATH_HOME . "entity/cache/" . $entity . '.json', "w");
         fwrite($fp, json_encode($data));
         fclose($fp);
     }
 
-    private function autoLoadInfo($data)
+    private static function autoLoadInfo(string $entity)
     {
-        if ($data && is_array($data)) {
-            $uniques = [];
-            foreach ($data as $column => $dados) {
-                switch ($dados['type']) {
-                    case 'extend':
-                        $data[$column] = $this->extend($data[$column], $column);
-                        break;
-                    case 'extend_mult':
-                        $data[$column] = $this->extendMultiple($data[$column], $column);
-                        break;
-                    case 'list':
-                        $data[$column] = $this->list($data[$column], $column);
-                        break;
-                    case 'list_mult':
-                        $data[$column] = $this->listMultiple($data[$column], $column);
-                        break;
-                    case 'pri':
-                        $data[$column] = $this->inputPrimary($data[$column], $column);
-                        break;
-                    case 'int':
-                        $data[$column] = $this->inputInt($data[$column]);
-                        break;
-                    case 'tinyint':
-                        $data[$column] = $this->inputTinyint($data[$column]);
-                        break;
-                    case 'title':
-                        $data[$column] = $this->inputTitle($column, $data[$column]);
-                        break;
-                    case 'link':
-                        $data[$column] = $this->inputLink($data, $column);
-                        break;
-                    case 'date':
-                        $data[$column] = $this->inputDate($data, $column);
-                        break;
-                    case 'datetime':
-                        $data[$column] = $this->inputDateTime($data, $column);
-                        break;
-                    case 'time':
-                        $data[$column] = $this->inputTime($data, $column);
-                        break;
-                    case 'week':
-                        $data[$column] = $this->inputWeek($data, $column);
-                        break;
-                    case 'cover':
-                        $data[$column] = $this->inputCover($data[$column]);
-                        break;
-                    case 'email':
-                        $data[$column] = $this->inputEmail($data[$column]);
-                        break;
-                    case 'password':
-                        $data[$column] = $this->inputPassword($data[$column]);
-                        break;
-                    case 'status':
-                        $data[$column] = $this->inputStatus($data[$column]);
-                        break;
-                    case 'text':
-                        $data[$column] = $this->inputText($data[$column]);
-                        break;
-                    case 'textarea':
-                        $data[$column] = $this->inputTextArea($data[$column]);
-                        break;
-                    case 'on':
-                        $data[$column] = $this->inputOn($data[$column]);
-                        break;
-                    case 'select':
-                        $data[$column] = $this->inputSelect($data[$column]);
-                        break;
-                    case 'valor':
-                        $data[$column] = $this->inputValor($data[$column]);
-                        break;
-                    case 'float':
-                        $data[$column] = $this->inputFloat($data[$column]);
-                        break;
-                    case 'cpf':
-                        $data[$column] = $this->inputCpf($data[$column]);
-                        break;
-                    case 'cnpj':
-                        $data[$column] = $this->inputCnpj($data[$column]);
-                        break;
-                }
-                $data[$column] = $this->checkTagsValuesDefault($data[$column], $column);
-                if($data[$column]['unique']) {
-                    $uniques[] = $column;
-                }
+        $identificador = 0;
+
+        $dataInfo = array("title" => null, "image" => null, "primary" => null, "extend" => null, "extend_mult" => null, "list" => null, "list_mult" => null);
+
+        $data = json_decode(file_get_contents(PATH_HOME . 'entity/cache/' . $entity . '.json'), true);
+        foreach ($data as $column => $metadados) {
+            switch ($metadados['type']) {
+                case 'extend':
+                    $data[$column] = self::extend($metadados);
+                    break;
+                case 'extend_mult':
+                    $data[$column] = self::extendMultiple($metadados);
+                    break;
+                case 'list':
+                    $data[$column] = self::list($metadados);
+                    break;
+                case 'list_mult':
+                    $data[$column] = self::listMultiple($metadados);
+                    break;
+                case 'pri':
+                    $data[$column] = self::inputPrimary($metadados);
+                    break;
+                case 'int':
+                    $data[$column] = self::inputInt($metadados);
+                    break;
+                case 'tinyint':
+                    $data[$column] = self::inputTinyint($metadados);
+                    break;
+                case 'title':
+                    $data[$column] = self::inputTitle($metadados);
+                    break;
+                case 'link':
+                    $data[$column] = self::inputLink($data, $column, $dataInfo);
+                    break;
+                case 'date':
+                    $data[$column] = self::inputDate($data, $column);
+                    break;
+                case 'datetime':
+                    $data[$column] = self::inputDateTime($data, $column);
+                    break;
+                case 'time':
+                    $data[$column] = self::inputTime($data, $column);
+                    break;
+                case 'week':
+                    $data[$column] = self::inputWeek($data, $column);
+                    break;
+                case 'cover':
+                    $data[$column] = self::inputCover($metadados);
+                    break;
+                case 'email':
+                    $data[$column] = self::inputEmail($metadados);
+                    break;
+                case 'password':
+                    $data[$column] = self::inputPassword($metadados);
+                    break;
+                case 'status':
+                    $data[$column] = self::inputStatus($metadados);
+                    break;
+                case 'text':
+                    $data[$column] = self::inputText($metadados);
+                    break;
+                case 'textarea':
+                    $data[$column] = self::inputTextArea($metadados);
+                    break;
+                case 'on':
+                    $data[$column] = self::inputOn($metadados);
+                    break;
+                case 'select':
+                    $data[$column] = self::inputSelect($metadados);
+                    break;
+                case 'valor':
+                    $data[$column] = self::inputValor($metadados);
+                    break;
+                case 'float':
+                    $data[$column] = self::inputFloat($metadados);
+                    break;
+                case 'cpf':
+                    $data[$column] = self::inputCpf($metadados);
+                    break;
+                case 'cnpj':
+                    $data[$column] = self::inputCnpj($metadados);
+                    break;
             }
 
-            $dataInfo = array(
-                "title" => $this->title ?? null,
-                "image" => $this->image ?? null,
-                "unique" => $uniques,
-                "primary" => $this->primary ?? null,
-                "extend" => $this->extendData ?? null,
-                "extend_mult" => $this->extendMultData ?? null,
-                "list" => $this->listData ?? null,
-                "list_mult" => $this->listMultData ?? null,
-            );
-            $this->createCache($this->entityName . "_info", $dataInfo);
+            $data[$column] = self::checkTagsValuesDefault($data[$column], $column, $identificador);
+            $dataInfo = self::setInfo($dataInfo, $data[$column], $column);
+
+            $identificador++;
         }
-
-
-        return $data;
+        
+        self::createCache($entity . "_info", $dataInfo);
+        self::createCache($entity, $data);
+        new CreateEntityStorage($entity, $data);
     }
 
-    private function checkTagsValuesDefault($field, $column)
+    private static function setInfo(array $dataInfo, array $data, string $column) :array
+    {
+
+        if ($data['unique']) {
+            $dataInfo["unique"][] = $column;
+
+        } elseif($data['key'] === "primary") {
+            $dataInfo["primary"] = $column;
+
+        } elseif($data['tag'] === "title") {
+            $dataInfo["title"] = $column;
+
+        } elseif($data['key'] === "list") {
+            $dataInfo["list"][] = $column;
+
+            if (!empty($data['tag']) && ((is_array($data['tag']) && in_array("image", $data['tag'])) || $data['tag'] === "image")) {
+                $dataInfo["image"] = $column;
+            }
+
+        } elseif($data['key'] === "list_mult") {
+            $dataInfo["list_mult"][] = $column;
+
+        } elseif($data['key'] === "extend_mult") {
+            $dataInfo["extend_mult"][] = $column;
+
+        } elseif($data['key'] === "extend") {
+            $dataInfo["extend"][] = $column;
+        }
+
+        return $dataInfo;
+    }
+
+    private static function checkTagsValuesDefault(array $field, string $column, int $identificador = 0) :array
     {
         $field['column'] = $column;
-        $field['title'] = $this->prepareColumnName($column);
+        $field['title'] = self::prepareColumnName($column);
         $field['class'] = $field['class'] ?? "";
-        $field['null'] = $field['null'] ?? true;
         $field['edit'] = $field['edit'] ?? true;
         $field['list'] = $field['list'] ?? true;
         $field['update'] = $field['update'] ?? true;
         $field['unique'] = $field['unique'] ?? false;
+        $field['null'] = ($field['unique'] ? false : ($field['null'] ?? true));
         $field['indice'] = $field['indice'] ?? false;
         $field["size"] = $field["size"] ?? "";
         $field["allow"] = $field["allow"] ?? "";
@@ -308,23 +229,13 @@ class Metadados
         $field["prefixo"] = $field["prefixo"] ?? "";
         $field["sulfixo"] = $field["sulfixo"] ?? "";
         $field['key'] = $field['key'] ?? "";
-        if(isset($field['identificador'])) {
-            $this->identificador = $field['identificador'] > $this->identificador ? $field['identificador'] : $this->identificador;
-        } else {
-            $field['identificador'] = $this->identificador;
-        }
-        $this->identificador ++;
-
-        if($field['unique']) {
-            $field['null'] = false;
-        }
+        $field['identificador'] = $identificador;
 
         return $field;
     }
 
-    private function extend($field, $column)
+    private static function extend($field)
     {
-        $this->extendData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "extend";
@@ -337,9 +248,8 @@ class Metadados
         return $field;
     }
 
-    private function list($field, $column)
+    private static function list($field)
     {
-        $this->listData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "list";
@@ -349,16 +259,11 @@ class Metadados
         $field['null'] = $field['null'] ?? true;
         $field['unique'] = false;
 
-        if (isset($field['tag']) && ((is_array($field['tag']) && in_array("image", $field['tag'])) || $field['tag'] === "image")) {
-            $this->image = $column;
-        }
-
         return $field;
     }
 
-    private function extendMultiple($field, $column)
+    private static function extendMultiple($field)
     {
-        $this->extendMultData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "extend_mult";
@@ -371,9 +276,8 @@ class Metadados
         return $field;
     }
 
-    private function listMultiple($field, $column)
+    private static function listMultiple($field)
     {
-        $this->listMultData[] = $column;
         $field['type'] = "int";
         $field['size'] = 11;
         $field['key'] = "list_mult";
@@ -386,7 +290,7 @@ class Metadados
         return $field;
     }
 
-    private function inputPrimary($field, $column)
+    private static function inputPrimary($field)
     {
         $field['type'] = "int";
         $field['size'] = 11;
@@ -395,12 +299,11 @@ class Metadados
         $field['input'] = "hidden";
         $field['update'] = false;
         $field['list'] = $field['list'] ?? false;
-        $this->primary = $column;
 
         return $field;
     }
 
-    private function inputText($field)
+    private static function inputText($field)
     {
         $field['type'] = "varchar";
         $field['input'] = "text";
@@ -408,7 +311,7 @@ class Metadados
         return $field;
     }
 
-    private function inputTextArea($field)
+    private static function inputTextArea($field)
     {
         $field['type'] = "text";
         $field['input'] = "textarea";
@@ -416,7 +319,7 @@ class Metadados
         return $field;
     }
 
-    private function inputInt($field)
+    private static function inputInt($field)
     {
         $field['size'] = $field['size'] ?? 11;
         $field['input'] = "int";
@@ -424,7 +327,7 @@ class Metadados
         return $field;
     }
 
-    private function inputTinyint($field)
+    private static function inputTinyint($field)
     {
         $field['size'] = $field['size'] ?? 1;
         $field['input'] = "int";
@@ -432,7 +335,7 @@ class Metadados
         return $field;
     }
 
-    private function inputTitle($column, $field)
+    private static function inputTitle($field)
     {
         $field['type'] = "varchar";
         $field['size'] = $field['size'] ?? 127;
@@ -442,16 +345,15 @@ class Metadados
         $field['tag'] = "title";
         $field['list'] = true;
         $field['input'] = "text";
-        $this->title = $column;
 
         return $field;
     }
 
-    private function inputLink($data, $field)
+    private static function inputLink($data, $field, $dataInfo)
     {
-        $data[$field]['link'] = $data[$field]['link'] ?? $this->title;
-        $data[$field]['type'] = $data[$this->title]['type'] ?? "varchar";
-        $data[$field]['size'] = $data[$field]['size'] ?? $data[$this->title]['size'];
+        $data[$field]['link'] = $data[$field]['link'] ?? $dataInfo['title'];
+        $data[$field]['type'] = $data[$dataInfo['title']]['type'] ?? "varchar";
+        $data[$field]['size'] = $data[$field]['size'] ?? $data[$dataInfo['title']]['size'];
         $data[$field]['null'] = false;
         $data[$field]['unique'] = true;
         $data[$field]['class'] = "font-size08";
@@ -461,7 +363,7 @@ class Metadados
         return $data[$field];
     }
 
-    private function inputDate($data, $field)
+    private static function inputDate($data, $field)
     {
         $data[$field]['input'] = "date";
         $data[$field]['default'] = $data[$field]['default'] ?? "date";
@@ -469,7 +371,7 @@ class Metadados
         return $data[$field];
     }
 
-    private function inputDateTime($data, $field)
+    private static function inputDateTime($data, $field)
     {
         $data[$field]['input'] = "datetime";
         $data[$field]['default'] = $data[$field]['default'] ?? "datetime";
@@ -477,7 +379,7 @@ class Metadados
         return $data[$field];
     }
 
-    private function inputTime($data, $field)
+    private static function inputTime($data, $field)
     {
         $data[$field]['input'] = "time";
         $data[$field]['default'] = $data[$field]['default'] ?? "time";
@@ -485,14 +387,14 @@ class Metadados
         return $data[$field];
     }
 
-    private function inputWeek($data, $field)
+    private static function inputWeek($data, $field)
     {
         $data[$field]['input'] = "week";
 
         return $data[$field];
     }
 
-    private function inputEmail($field)
+    private static function inputEmail($field)
     {
         $field['type'] = 'varchar';
         $field['size'] = 127;
@@ -502,7 +404,7 @@ class Metadados
         return $field;
     }
 
-    private function inputPassword($field)
+    private static function inputPassword($field)
     {
         $field['type'] = 'varchar';
         $field['size'] = $field['size'] ?? 255;
@@ -512,7 +414,7 @@ class Metadados
         return $field;
     }
 
-    private function inputCover($field)
+    private static function inputCover($field)
     {
         $field['type'] = 'varchar';
         $field['size'] = 255;
@@ -524,7 +426,7 @@ class Metadados
         return $field;
     }
 
-    private function inputStatus($field)
+    private static function inputStatus($field)
     {
         $field['type'] = 'tinyint';
         $field['size'] = 1;
@@ -537,7 +439,7 @@ class Metadados
         return $field;
     }
 
-    private function inputOn($field)
+    private static function inputOn($field)
     {
         $field['type'] = 'tinyint';
         $field['size'] = 1;
@@ -549,7 +451,7 @@ class Metadados
         return $field;
     }
 
-    private function inputSelect($field)
+    private static function inputSelect($field)
     {
         $field['type'] = 'int';
         $field['input'] = "select";
@@ -557,7 +459,7 @@ class Metadados
         return $field;
     }
 
-    private function inputValor($field)
+    private static function inputValor($field)
     {
         $field['type'] = 'double';
         $field['input'] = "valor";
@@ -565,7 +467,7 @@ class Metadados
         return $field;
     }
 
-    private function inputFloat($field)
+    private static function inputFloat($field)
     {
         $field['type'] = 'float';
         $field['input'] = "float";
@@ -573,7 +475,7 @@ class Metadados
         return $field;
     }
 
-    private function inputCpf($field)
+    private static function inputCpf($field)
     {
         $field['type'] = 'varchar';
         $field['input'] = "cpf";
@@ -582,7 +484,7 @@ class Metadados
         return $field;
     }
 
-    private function inputCnpj($field)
+    private static function inputCnpj($field)
     {
         $field['type'] = 'varchar';
         $field['input'] = "cnpj";
@@ -591,7 +493,7 @@ class Metadados
         return $field;
     }
 
-    private function prepareColumnName($column)
+    private static function prepareColumnName($column)
     {
         return trim(ucwords(str_replace(array('_', '-'), ' ', $column)));
     }
