@@ -16,19 +16,8 @@ class Entity
     public function __construct($entity)
     {
         $this->entity = $entity;
-        $this->metadados = Metadados::getStruct($entity);
+        $this->metadados = Metadados::getStructInfo($entity);
         $this->setDefaultFieldsToEntity();
-    }
-
-    /**
-     * @param string $erro
-     * @param int $line
-     * @param string $field
-     */
-    public function setErro(string $erro, int $line, string $field)
-    {
-        $this->erro[$field]['mensagem'] = $erro;
-        $this->erro[$field]['line'] = $line;
     }
 
     /**
@@ -39,6 +28,11 @@ class Entity
         foreach ($data as $field => $value) {
             $this->setDataToEntity($field, $value);
         }
+    }
+
+    public function set($field, $value)
+    {
+        $this->setDataToEntity($field, $value);
     }
 
     /**
@@ -54,9 +48,34 @@ class Entity
     /**
      * @return array
      */
+    public function getMetadados(): array
+    {
+        return $this->metadados;
+    }
+
+    /**
+     * @return array
+     */
     public function getData(): array
     {
         return $this->getDataOnly();
+    }
+
+    /**
+     * @return array
+     */
+    public function systemGetEditableData(): array
+    {
+        return $this->getEditableDataEntity();
+    }
+
+
+    /**
+     * @return array
+     */
+    public function systemGetRelationalColumn(): array
+    {
+        return $this->getRelationalColumnEntity();
     }
 
     /**
@@ -75,14 +94,95 @@ class Entity
         return $this->erro;
     }
 
+    public function get(string $column)
+    {
+        return $this->data[$column] ?? null;
+    }
+
+    /**
+     * retorna a data da entidade, da forma como ela esta
+     * @return array
+     */
+    public function systemGetData(): array
+    {
+        return $this->data;
+    }
+
     /**
      * obtem valor de um field
-     * @param string $field
+     * @param string $column
      * @return mixed
      */
-    public function __get(string $field)
+    public function __get(string $column)
     {
-        return $this->data[$field] ?? null;
+        return $this->data[$column] ?? null;
+    }
+
+    /**
+     * Armazena esta entidade e retorna o id de armazenamento
+     * ou retorna null caso haja algum problema
+     * @return mixed
+     */
+    public function save()
+    {
+        $id = DataBase::add($this);
+        $this->erro = DataBase::getErro();
+
+        return $id;
+    }
+
+    /**
+     * Deleta dados da entidade
+     * @param mixed $id
+    */
+    public function delete($id = null)
+    {
+        if($id) {
+            $this->load($id);
+        }
+        DataBase::delete($this);
+        $this->erro = DataBase::getErro();
+    }
+
+    /**
+     * Carrega uma entidade para a memória a partir de um id
+     * @param int $id
+     */
+    public function load(int $id)
+    {
+        $data = DataBase::get($this, $id);
+        $this->erro = DataBase::getErro();
+        $this->data = $data->systemGetData();
+    }
+
+    /**
+     * Carrega uma entidade semelhante para a memória a partir de um id
+     * @param mixed $id
+     */
+    public function duplicate($id = null)
+    {
+        if($id) {
+            $this->load($id);
+        }
+
+        if($this->data[$this->metadados['info']['primary']]) {
+            $data = DataBase::copy($this);
+            $this->erro = DataBase::getErro();
+            $this->data = $data->systemGetData();
+        } else {
+            $this->erro = "Não é possível duplicar uma entidade ('{$this->entity}') sem um 'id'.";
+        }
+    }
+
+    /**
+     * @param string $erro
+     * @param int $line
+     * @param string $field
+     */
+    private function setErro(string $erro, int $line, string $field)
+    {
+        $this->erro[$field]['mensagem'] = $erro;
+        $this->erro[$field]['line'] = $line;
     }
 
     /**
@@ -92,11 +192,14 @@ class Entity
     private function setDataToEntity($field, $value)
     {
         try {
+            if($field === $this->metadados['info']['primary'] && $this->data[$field] && $this->data[$field] > 0 && !is_null($value)) {
+                throw new \Exception("Chave primaria não pode ser modificada.");
+            }
             if (!is_string($field)) {
                 throw new \Exception("Esperava um field string, outro valor informado.");
             }
             if (array_key_exists($field, $this->data)) {
-                $this->data[$field] = $this->checkValueField($value, $this->metadados[$field], $this->data[$field]);
+                $this->data[$field] = $this->checkValueField($value, $this->metadados['struct'][$field], $this->data[$field]);
             }
         } catch (\Exception $e) {
             $this->setErro($e->getMessage(), $e->getLine(), $field);
@@ -120,7 +223,7 @@ class Entity
                 $value = $currentValue;
 
             } else {
-                $value = $this->checkType($value, $metadados);
+                $value = $this->checkType($value, $metadados, $currentValue);
                 $value = $this->checkSize($value, $metadados['type'], $metadados['key'], $metadados['title'], $metadados['size']);
 
                 if (empty($value)) {
@@ -150,21 +253,21 @@ class Entity
      * transformando o valor no tipo esperado.
      * @param mixed $value
      * @param array $metadados
+     * @param mixed $current
      * @return mixed
      * @throws \Exception
      */
-    private function checkType($value, array $metadados)
+    private function checkType($value, array $metadados, $current = null)
     {
         $type = $metadados['type'];
         $title = $metadados['title'];
 
-        if (in_array($metadados['key'], array("extend", "extend_mult", "list", "list_mult"))) {
+        if (in_array($metadados['key'], array("extend_mult", "list_mult"))) {
+            $value = $this->checkDataforFkMult($value, $title, $metadados, $current);
 
-            if (in_array($metadados['key'], array("extend_mult", "list_mult"))) {
-                $value = $this->checkDataforFkMult($value, $title, $metadados);
-            } else {
-                $value = $this->checkDataforFk($value, $title, $metadados);
-            }
+        } elseif (in_array($metadados['key'], array("extend", "list"))) {
+            $value = $this->checkDataforFk($value, $title, $metadados);
+
         } else {
             if (is_array($value) || is_object($value)) {
                 throw new \Exception($title . " esperava um valor, não um array ou objeto");
@@ -178,7 +281,7 @@ class Entity
 
             } elseif (in_array($type, array("tinyint", "int", "mediumint", "longint", "bigint"))) {
                 if (!is_numeric($value)) {
-                    if(is_bool($value)) {
+                    if (is_bool($value)) {
                         $value = $value ? 1 : 0;
                     } else {
                         throw new \Exception($title . " esperava um valor inteiro.");
@@ -200,15 +303,15 @@ class Entity
                 }
                 $value = (bool)$value;
 
-            } elseif($type === "date") {
+            } elseif ($type === "date") {
                 $data = new Date();
                 $value = $data->getDate($value);
 
-            } elseif($type === "time") {
+            } elseif ($type === "time") {
                 $data = new Time();
                 $value = $data->getTime($value);
 
-            } elseif($type === "datetime") {
+            } elseif ($type === "datetime") {
                 $data = new DateTime();
                 $value = $data->getDateTime($value);
 
@@ -226,7 +329,7 @@ class Entity
      */
     private function setDefaultFieldsToEntity()
     {
-        foreach ($this->metadados as $field => $metadados) {
+        foreach ($this->metadados['struct'] as $field => $metadados) {
             $this->data[$field] = $this->checkDefault($metadados['default']);
         }
     }
@@ -294,24 +397,6 @@ class Entity
         return $value;
     }
 
-    private function getDataOnly()
-    {
-        $data = null;
-        foreach ($this->data as $field => $value) {
-            try {
-                if (in_array($this->metadados[$field]['key'], array('extend_mult', 'list_mult', 'list', 'extend'))) {
-                    $data[$field] = $this->checkObjectEntity($value, $field);
-                } else {
-                    $data[$field] = $value;
-                }
-            } catch (\Exception $e) {
-                $this->setErro($e->getMessage(), $e->getLine(), $field);
-            }
-        }
-
-        return $data;
-    }
-
     /**
      * @param mixed $objeto
      * @param string $field
@@ -325,7 +410,7 @@ class Entity
             return null;
         } elseif (is_array($objeto)) {
             if ($recursivo) {
-                throw new \Exception($this->metadados[$field]['title'] . " esperava um objeto Entity, mas foi encontrado um array.");
+                throw new \Exception($this->metadados['struct'][$field]['title'] . " esperava um objeto Entity, mas foi encontrado um array.");
             } else {
                 $dados = null;
                 foreach ($objeto as $item) {
@@ -337,7 +422,7 @@ class Entity
             return $objeto->getData();
         }
 
-        throw new \Exception($this->metadados[$field]['title'] . " esperava um objeto Entity.");
+        throw new \Exception($this->metadados['struct'][$field]['title'] . " esperava um objeto Entity.");
     }
 
 
@@ -345,30 +430,35 @@ class Entity
      * @param mixed $value
      * @param string $title
      * @param array $metadados
+     * @param mixed $current
      * @return mixed
      * @throws \Exception
      */
-    private function checkDataforFkMult($value, string $title, array $metadados)
+    private function checkDataforFkMult($value, string $title, array $metadados, $current = null)
     {
         if (!is_array($value)) {
-            return array(0 => $this->checkDataforFk($value, $title, $metadados));
+            $data = (isset($current) && is_array($current) ? $current : []);
+            $data[] = $this->checkDataforFk($value, $title, $metadados);
+
+        } else {
+            $data = [];
+            $indice = 0;
+            foreach ($value as $i => $item) {
+                if ($i !== $indice) {
+                    $data = (isset($current) && is_array($current) ? $current : []);
+                    $data[] = $this->checkDataforFk($value, $title, $metadados);
+                }
+
+                try {
+                    $data[] = $this->checkDataforFk($item, $title, $metadados);
+                } catch (\Exception $ex) {
+                    $this->setErro($ex->getMessage(), $ex->getLine(), $metadados['column']);
+                }
+
+                $indice++;
+            }
         }
 
-        $data = [];
-        $indice = 0;
-        foreach ($value as $i => $item) {
-            if ($i !== $indice) {
-                return array(0 => $this->checkDataforFk($value, $title, $metadados));
-            }
-
-            try {
-                $data[] = $this->checkDataforFk($item, $title, $metadados);
-            } catch (\Exception $ex) {
-                $this->setErro($ex->getMessage(), $ex->getLine(), $metadados['column']);
-            }
-
-            $indice++;
-        }
         return $data;
     }
 
@@ -381,8 +471,9 @@ class Entity
      */
     private function checkDataforFk($value, string $title, array $metadados)
     {
-        if (is_null($value)) {
+        if (empty($value)) {
             return null;
+
         } elseif (is_array($value)) {
             $obj = new Entity($metadados['table']);
             $obj->setData($value);
@@ -392,7 +483,7 @@ class Entity
             return $obj;
 
         } elseif (is_numeric($value)) {
-            return $this->getEntityFromId($value, $metadados['table']);
+            return DataBase::get($metadados['table'], $value);
 
         } elseif (!is_object($value) || !is_a($value, "Entity\Entity") || $metadados['table'] !== $value->getEntity()) {
             throw new \Exception($title . " esperava um Objeto Entity -> {$metadados['table']}.");
@@ -401,7 +492,12 @@ class Entity
         return $value;
     }
 
-    private function erroToString(array $erro) :string
+    /**
+     * Converte o array de erros de uma entidade no formato string
+     * @param array $erro
+     * @return string
+     */
+    private function erroToString(array $erro): string
     {
         $string = "";
         foreach ($erro as $field => $dados) {
@@ -412,13 +508,59 @@ class Entity
     }
 
     /**
-     * @param int $id
-     * @param string $table
-     * @return Entity
+     * obtem uma lista de todos os dados desta entidade em formato json
+     * @return array
      */
-    private function getEntityFromId(int $id, string $table): Entity
+    private function getDataOnly(): array
     {
-        $objData = new DataBase($table);
-        return $objData->get($id);
+        $data = [];
+        foreach ($this->data as $field => $value) {
+            try {
+                if (in_array($this->metadados['struct'][$field]['key'], array('extend_mult', 'list_mult', 'list', 'extend'))) {
+                    $data[$field] = $this->checkObjectEntity($value, $field);
+                } else {
+                    $data[$field] = $value;
+                }
+            } catch (\Exception $e) {
+                $this->setErro($e->getMessage(), $e->getLine(), $field);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Obtem uma lista dos campos que devem ser salvos nesta entidade
+     * @return array
+     */
+    private function getEditableDataEntity(): array
+    {
+        $data = [];
+        foreach ($this->data as $column => $value) {
+            if (!in_array($this->metadados['struct'][$column]['key'], array('primary', 'extend_mult', 'list_mult'))) {
+                $data[$column] = $value;
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Obtem uma lista das relações multiplas desta entidade
+     * @return array
+     */
+    private function getRelationalColumnEntity(): array
+    {
+        if (!empty($this->metadados['info']['extend_mult']) && !empty($this->metadados['info']['list_mult'])) {
+            return array_merge($this->metadados['info']['extend_mult'], $this->metadados['info']['list_mult']);
+
+        } elseif (!empty($this->metadados['info']['list_mult'])) {
+            return $this->metadados['info']['list_mult'];
+
+        } elseif (!empty($this->metadados['info']['extend_mult'])) {
+            return $this->metadados['info']['extend_mult'];
+        }
+
+        return [];
     }
 }

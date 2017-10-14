@@ -390,7 +390,7 @@ class Metadados
     {
         $field['type'] = "int";
         $field['size'] = 11;
-        $field['null'] = false;
+        $field['null'] = true;
         $field['key'] = "primary";
         $field['input'] = "hidden";
         $field['update'] = false;
