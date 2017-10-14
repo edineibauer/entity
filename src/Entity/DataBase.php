@@ -163,11 +163,15 @@ class DataBase
     {
         try {
             $field = $data->getMetadados()['struct'][$column];
-            if (isset($field['link']) && !empty($field['link'])) {
-                $value = Check::name($data->get($field['link']));
+
+            if(!in_array($field['key'], array('list', 'extend'))) {
+                if (isset($field['link']) && !empty($field['link'])) {
+                    $value = Check::name($data->get($field['link']));
+                }
+
+                self::checkUnique($data, $column, $value);
             }
 
-            self::checkUnique($data, $column, $value);
             $value = self::checkNull($data, $column, $value);
 
         } catch (\Exception $e) {
