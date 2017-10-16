@@ -18,54 +18,63 @@ class Metadados extends CreateEntityStorage
 
     /**
      * @param string $entity
-     * @return array
+     * @return mixed
      */
-    public static function getStructInfo(string $entity): array
+    public static function getStructInfo(string $entity)
     {
         self::checkLoad($entity);
-        return array("struct" => self::getStruct($entity), "info" => self::getInfo($entity));
+        return self::$erro ? null : array("struct" => self::getStruct($entity), "info" => self::getInfo($entity));
     }
 
     /**
      * @param string $entity
-     * @return array
+     * @return mixed
      */
-    public static function getStruct($entity): array
+    public static function getStruct($entity)
     {
         self::checkLoad($entity);
-        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true);
+        return self::$erro ? null : json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true);
     }
 
     /**
      * @param string $entity
-     * @return array
+     * @return mixed
      */
-    public static function getInfo($entity): array
+    public static function getInfo($entity)
     {
         self::checkLoad($entity);
-        return json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '_info.json'), true);
+        return self::$erro ? null : json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '_info.json'), true);
     }
 
     /**
      * @param string $entity
-     * @return array
+     * @return mixed
      */
-    public static function getFields($entity): array
+    public static function getFields($entity)
     {
         self::checkLoad($entity);
-        return array_keys(json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true));
+        return self::$erro ? null : array_keys(json_decode(file_get_contents(PATH_HOME . "entity/cache/" . $entity . '.json'), true));
     }
 
     private static function checkLoad(string $entity)
     {
-        if (!file_exists(PATH_HOME . "entity/cache/" . $entity . '.json') && file_exists(PATH_HOME . "entity/" . $entity . '.json')) {
+        if ((!file_exists(PATH_HOME . "entity/cache/" . $entity . '.json') || !file_exists(PATH_HOME . "entity/cache/" . $entity . '_info.json')) && file_exists(PATH_HOME . "entity/" . $entity . '.json')) {
 
             self::autoLoadInfo($entity);
 
         } else {
-            Helper::createFolderIfNoExist(PATH_HOME . "entity");
-            self::$erro = "não foi possível encontrar a entidade na pasta 'entity/' no formato json";
 
+            if(!file_exists(PATH_HOME . "entity/" . $entity . '.json')) {
+                if (file_exists(PATH_HOME . "entity/cache/" . $entity . '.json')) {
+                    unlink(PATH_HOME . "entity/cache/{$entity}.json");
+                }
+                if (file_exists(PATH_HOME . "entity/cache/" . $entity . '_info.json')) {
+                    unlink(PATH_HOME . "entity/cache/{$entity}_info.json");
+                }
+
+                Helper::createFolderIfNoExist(PATH_HOME . "entity");
+                self::$erro = "não foi possível encontrar a entidade na pasta 'entity/' no formato json";
+            }
         }
     }
 
@@ -83,7 +92,7 @@ class Metadados extends CreateEntityStorage
 
         $dataInfo = array("title" => null, "image" => null, "primary" => null, "extend" => null, "extend_mult" => null, "list" => null, "list_mult" => null);
 
-        $data = json_decode(file_get_contents(PATH_HOME . 'entity/cache/' . $entity . '.json'), true);
+        $data = json_decode(file_get_contents(PATH_HOME . 'entity/' . $entity . '.json'), true);
         foreach ($data as $column => $metadados) {
             switch ($metadados['type']) {
                 case 'extend':
@@ -163,12 +172,16 @@ class Metadados extends CreateEntityStorage
                     break;
             }
 
+            if(isset($data[$column]['identificador'])) {
+                $identificador = $data[$column]['identificador'] > $identificador ? $data[$column]['identificador'] : $identificador;
+            }
+
             $data[$column] = self::checkTagsValuesDefault($data[$column], $column, $identificador);
             $dataInfo = self::setInfo($dataInfo, $data[$column], $column);
 
             $identificador++;
         }
-        
+
         self::createCache($entity . "_info", $dataInfo);
         self::createCache($entity, $data);
         new CreateEntityStorage($entity, $data);
@@ -182,8 +195,9 @@ class Metadados extends CreateEntityStorage
 
         } elseif($data['key'] === "primary") {
             $dataInfo["primary"] = $column;
+        }
 
-        } elseif($data['tag'] === "title") {
+        if($data['tag'] === "title") {
             $dataInfo["title"] = $column;
 
         } elseif($data['key'] === "list") {
@@ -229,7 +243,8 @@ class Metadados extends CreateEntityStorage
         $field["prefixo"] = $field["prefixo"] ?? "";
         $field["sulfixo"] = $field["sulfixo"] ?? "";
         $field['key'] = $field['key'] ?? "";
-        $field['identificador'] = $identificador;
+        $field['tag'] = $field['tag'] ?? "";
+        $field['identificador'] = $field['identificador'] ?? $identificador;
 
         return $field;
     }
