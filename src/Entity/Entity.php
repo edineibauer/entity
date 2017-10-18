@@ -283,6 +283,8 @@ class Entity
                 if (!is_numeric($value)) {
                     if (is_bool($value)) {
                         $value = $value ? 1 : 0;
+                    } elseif (is_string($value)) {
+                        $value = $value === "true" ? 1 : 0;
                     } else {
                         throw new \Exception($title . " esperava um valor inteiro.");
                     }
