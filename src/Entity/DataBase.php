@@ -15,12 +15,13 @@ class DataBase
     /**
      * Adiciona dados a uma entidade
      * @param Entity $data
+     * @param mixed $modelErroControl
      * @return mixed $id
      */
-    public static function add(Entity $data)
+    public static function add(Entity $data, $modelErroControl = null)
     {
         self::$erro = null;
-        return self::addDataEntity($data);
+        return self::addDataEntity($data, $modelErroControl);
     }
 
     /**
@@ -46,10 +47,11 @@ class DataBase
     /**
      * Retorna uma entidade a partir de um id
      * @param mixed $data
-     * @param int $id
+     * @param mixed $id
+     * @param string $field
      * @return Entity
      */
-    public static function get($data, int $id): Entity
+    public static function get($data, $id, string $field = null): Entity
     {
         self::$erro = null;
         if (is_string($data)) {
@@ -59,7 +61,7 @@ class DataBase
         if (!is_object($data) || !is_a($data, "Entity\Entity")) {
             self::$erro = "não foi possível carregar a entidade passada. Envie uma entidade e um id.";
         } else {
-            $data = self::getEntityValues($data, $id);
+            $data = self::getEntityValues($data, $id, $field);
         }
 
         return $data;
@@ -76,16 +78,21 @@ class DataBase
     /**
      * Retorna uma entidade a partir de um id
      * @param mixed $data
-     * @param int $id
+     * @param mixed $id
+     * @param string $field
      * @return Entity
      */
-    private static function getEntityValues(Entity $data, int $id): Entity
+    private static function getEntityValues(Entity $data, $id, string $field = null): Entity
     {
         $read = new Read();
-        $read->exeRead($data->getEntity(), "WHERE " . $data->getMetadados()['info']['primary'] . " = :id", "id={$id}");
+        if($field) {
+            $read->exeRead($data->getEntity(), "WHERE " . $field . " = :va ORDER BY {$data->getMetadados()['info']['primary']} DESC LIMIT 1", "va={$id}");
+        } else {
+            $read->exeRead($data->getEntity(), "WHERE " . $data->getMetadados()['info']['primary'] . " = :id LIMIT 1", "id={$id}");
+        }
         if ($read->getResult()) {
             foreach ($read->getResult()[0] as $column => $value) {
-                if (in_array($column, array("list", "extend"))) {
+                if (in_array($data->getMetadados()['struct'][$column]['key'], array("list", "extend"))) {
                     if ($value && !empty($data->getMetadados()['struct'][$column]['table'])) {
                         $data->set($column, DataBase::get($data->getMetadados()['struct'][$column]['table'], $value));
                     }
@@ -130,21 +137,22 @@ class DataBase
     /**
      * adiciona dados para uma entidade
      * @param Entity $data
+     * @param mixed $modelColumn
      * @return mixed
     */
-    private static function addDataEntity(Entity $data)
+    private static function addDataEntity(Entity $data, $modelColumn = null)
     {
         $id = null;
 
         foreach ($data->systemGetEditableData() as $column => $value) {
-            $data->set($column, self::checkValueColumn($data, $column, $value));
+            $data->set($column, self::checkValueColumn($data, $column, $value, $modelColumn));
         }
 
         if (!self::$erro) {
             if ($data->get($data->getMetadados()['info']['primary'])) {
-                $id = self::updateEntity($data);
+                $id = self::updateEntity($data, $modelColumn);
             } else {
-                $id = self::createEntity($data);
+                $id = self::createEntity($data, $modelColumn);
             }
 
             self::createRelationalInfo($data, $id);
@@ -157,9 +165,10 @@ class DataBase
      * @param Entity $data
      * @param string $column
      * @param mixed $value
+     * @param mixed $modelColumn
      * @return mixed
      */
-    private static function checkValueColumn(Entity $data, string $column, $value)
+    private static function checkValueColumn(Entity $data, string $column, $value, $modelColumn = null)
     {
         try {
             $field = $data->getMetadados()['struct'][$column];
@@ -175,7 +184,7 @@ class DataBase
             $value = self::checkNull($data, $column, $value);
 
         } catch (\Exception $e) {
-            self::setErro($e->getMessage(), $e->getLine(), $column);
+            self::setErro($e->getMessage(), $e->getLine(), $column, $modelColumn);
 
         } finally {
 
@@ -227,16 +236,17 @@ class DataBase
     /**
      * Atualiza os dados de uma entidade
      * @param Entity $data
+     * @param mixed $modelColumn
      * @return mixed
      */
-    private static function updateEntity(Entity $data)
+    private static function updateEntity(Entity $data, $modelColumn = null)
     {
         $primary = $data->getMetadados()['info']['primary'];
         $read = new Read();
         $read->exeRead($data->getEntity(), "WHERE {$primary} = :pid", "pid={$data->get($primary)}");
         if ($read->getResult()) {
             $update = new Update();
-            $update->exeUpdate($data->getEntity(), self::getDadosEntity($data), "WHERE {$primary} = :id", "id={$data->get($primary)}");
+            $update->exeUpdate($data->getEntity(), self::getDadosEntity($data, $modelColumn), "WHERE {$primary} = :id", "id={$data->get($primary)}");
         } else {
             return self::createEntity($data);
         }
@@ -247,12 +257,13 @@ class DataBase
     /**
      * cria dados em uma entidade
      * @param Entity $data
+     * @param mixed $modelColumn
      * @return mixed
      */
-    private static function createEntity(Entity $data)
+    private static function createEntity(Entity $data, $modelColumn = null)
     {
         $create = new Create();
-        $create->exeCreate($data->getEntity(), self::getDadosEntity($data));
+        $create->exeCreate($data->getEntity(), self::getDadosEntity($data, $modelColumn));
 
         return ($create->getResult() ? $create->getResult() : null);
     }
@@ -261,15 +272,17 @@ class DataBase
      * obtem os dados de uma entidade,
      * cria entidades extend e list e retorna o id de relacionamento, deixando preparado os dados para armazenamento
      * @param Entity $data
+     * @param mixed $modelColumn
      * @return array
      */
-    private static function getDadosEntity(Entity $data): array
+    private static function getDadosEntity(Entity $data, $modelColumn = null): array
     {
         $dados = [];
         foreach ($data->systemGetEditableData() as $column => $value) {
             if (in_array($data->getMetadados()['struct'][$column]['key'], array('extend', 'list'))) {
                 if (!empty($value) && is_object($value) && is_a($value, "Entity\Entity")) {
-                    $dados[$column] = DataBase::add($value);
+                    $modelColumn = ($modelColumn ?? "") . $column . ".";
+                    $dados[$column] = DataBase::add($value, $modelColumn);
                 }
             } else {
                 $dados[$column] = $value;
@@ -289,18 +302,22 @@ class DataBase
         if ($id && $id > 0) {
             $create = new Create();
             $read = new Read();
+            $del = new Delete();
             foreach ($data->systemGetRelationalColumn() as $column) {
-                if (!empty($column)) {
+                $del->exeDelete(PRE . $data->getEntity() . "_" . $data->getMetadados()['struct'][$column]['table'], "WHERE " . $data->getEntity() . "_id = :gip", "gip={$id}");
+                if (!empty($column) && !empty($data->get($column))) {
                     foreach ($data->get($column) as $entityExtend) {
-                        $relational[$entityExtend->getEntity() . "_id"] = $entityExtend->save();
-                        $relational[$data->getEntity() . "_id"] = $id;
-                        if ($relational[$entityExtend->getEntity() . "_id"]) {
-                            $read->exeRead(PRE . $data->getEntity() . "_" . $entityExtend->getEntity(), "WHERE " . $entityExtend->getEntity() . "_id = :fid && " . $data->getEntity() . "_id = :gid", "fid={$relational[$entityExtend->getEntity() . "_id"]}&gid={$id}");
-                            if (!$read->getResult()) {
-                                $create->exeCreate(PRE . $data->getEntity() . "_" . $entityExtend->getEntity(), $relational);
+                        if(is_a($entityExtend, 'Entity\Entity')) {
+                            $relational[$entityExtend->getEntity() . "_id"] = $entityExtend->save();
+                            $relational[$data->getEntity() . "_id"] = $id;
+                            if ($relational[$entityExtend->getEntity() . "_id"]) {
+                                $read->exeRead(PRE . $data->getEntity() . "_" . $entityExtend->getEntity(), "WHERE " . $entityExtend->getEntity() . "_id = :fid && " . $data->getEntity() . "_id = :gid", "fid={$relational[$entityExtend->getEntity() . "_id"]}&gid={$id}");
+                                if (!$read->getResult()) {
+                                    $create->exeCreate(PRE . $data->getEntity() . "_" . $entityExtend->getEntity(), $relational);
+                                }
                             }
+                            unset($relational);
                         }
-                        unset($relational);
                     }
                 }
             }
@@ -410,9 +427,10 @@ class DataBase
      * @param mixed $erro
      * @param int $linha
      * @param mixed $coluna
+     * @param mixed $modelControl
      */
-    private static function setErro(string $erro, int $linha, string $coluna)
+    private static function setErro(string $erro, int $linha, string $coluna, $modelControl = null)
     {
-        self::$erro[$coluna] = $erro;
+        self::$erro[($modelControl ?? "") . $coluna] = $erro;
     }
 }

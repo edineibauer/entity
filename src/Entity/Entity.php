@@ -4,6 +4,7 @@ namespace Entity;
 
 use Helpers\Date;
 use Helpers\DateTime;
+use Helpers\Helper;
 use Helpers\Time;
 
 class Entity
@@ -33,6 +34,17 @@ class Entity
     public function set($field, $value)
     {
         $this->setDataToEntity($field, $value);
+    }
+
+    /**
+     * @param string $erro
+     * @param int $line
+     * @param string $field
+     * @param mixed $modelControl
+     */
+    private function setErro(string $erro, string $field, $modelControl = null)
+    {
+        $this->erro[($modelControl ? $modelControl . "." : "") . $field] = $erro;
     }
 
     /**
@@ -66,7 +78,14 @@ class Entity
      */
     public function systemGetEditableData(): array
     {
-        return $this->getEditableDataEntity();
+        $data = [];
+        foreach ($this->data as $column => $value) {
+            if (!in_array($this->metadados['struct'][$column]['key'], array('primary', 'extend_mult', 'list_mult'))) {
+                $data[$column] = $value;
+            }
+        }
+
+        return $data;
     }
 
 
@@ -175,17 +194,6 @@ class Entity
     }
 
     /**
-     * @param string $erro
-     * @param int $line
-     * @param string $field
-     */
-    private function setErro(string $erro, int $line, string $field)
-    {
-        $this->erro[$field]['mensagem'] = $erro;
-        $this->erro[$field]['line'] = $line;
-    }
-
-    /**
      * @param mixed $field
      * @param mixed $value
      */
@@ -202,7 +210,7 @@ class Entity
                 $this->data[$field] = $this->checkValueField($value, $this->metadados['struct'][$field], $this->data[$field]);
             }
         } catch (\Exception $e) {
-            $this->setErro($e->getMessage(), $e->getLine(), $field);
+            $this->setErro($e->getMessage(), $field);
         }
     }
 
@@ -216,22 +224,26 @@ class Entity
     private function checkValueField($value, array $metadados, $currentValue = null)
     {
         try {
-            if ($metadados['null'] && empty($value)) {
+            if ($metadados['null'] && $value === "") {
                 $value = null;
 
-            } elseif (!$metadados['null'] && empty($value)) {
+            } elseif (!$metadados['null'] && $value === "") {
                 $value = $currentValue;
 
             } else {
                 $value = $this->checkType($value, $metadados, $currentValue);
                 $value = $this->checkSize($value, $metadados['type'], $metadados['key'], $metadados['title'], $metadados['size']);
 
-                if (empty($value)) {
+                if ($metadados['null'] && $value === "") {
+                    $value = null;
+
+                } elseif (!$metadados['null'] && $value === "") {
                     $value = $currentValue;
+
                 } else {
 
                     if (!empty($metadados['allow']) && is_array($metadados['allow']) && !in_array($value, $metadados['allow'])) {
-                        throw new \Exception($metadados['title'] . " não possue um dos valores permitidos. [" . implode(', ', $metadados['allow']) . "]");
+                        throw new \Exception("Valores permitidos. [" . implode(', ', $metadados['allow']) . "]");
                     }
 
                     if (!empty($metadados['regular']) && !preg_match("/" . preg_quote($metadados['regular']) . "/i", $value)) {
@@ -242,7 +254,7 @@ class Entity
 
         } catch (\Exception $e) {
             $value = $currentValue;
-            $this->setErro($e->getMessage(), $e->getLine(), $metadados['column']);
+            $this->setErro($e->getMessage(), $metadados['column']);
         }
 
         return $value;
@@ -266,7 +278,7 @@ class Entity
             $value = $this->checkDataforFkMult($value, $title, $metadados, $current);
 
         } elseif (in_array($metadados['key'], array("extend", "list"))) {
-            $value = $this->checkDataforFk($value, $title, $metadados);
+            $value = $this->checkDataforFk($value, $title, $metadados, $current);
 
         } else {
             if (is_array($value) || is_object($value)) {
@@ -284,12 +296,13 @@ class Entity
                     if (is_bool($value)) {
                         $value = $value ? 1 : 0;
                     } elseif (is_string($value)) {
-                        $value = $value === "true" ? 1 : 0;
+                        $value = $value === "false" ? 0 : 1;
                     } else {
                         throw new \Exception($title . " esperava um valor inteiro.");
                     }
+                } else {
+                    $value = (int)$value;
                 }
-                $value = (int)$value;
 
             } elseif (in_array($type, array("bool", "boolean"))) {
                 if (!is_bool($value)) {
@@ -298,7 +311,7 @@ class Entity
                     } elseif (is_null($value)) {
                         $value = false;
                     } elseif (is_string($value)) {
-                        $value = true;
+                        $value = $value === "false" ? false : true;
                     } else {
                         throw new \Exception($title . " esperava um valor boleano.");
                     }
@@ -381,8 +394,9 @@ class Entity
     private function checkSize($value, string $type, string $key, string $title, $size = null)
     {
         if (!in_array($key, array("list", "list_mult", "extend", "extend_mult"))) {
+            $size = empty($size) ? null : $size;
             $text = ["char" => $size ?? 1, "tinytext" => $size ?? 255, "text" => $size ?? 65535, "mediumtext" => $size ?? 16777215, "longtext" => $size ?? 4294967295, "varchar" => $size];
-            $int = ["tinyint" => $size ?? 4, "smallint" => $size ?? 8, "mediumint" => $size ?? 12, "int" => $size ?? 16, "bigint" => $size ?? 32];
+            $int = ["tinyint" => $size ?? 4, "smallint" => $size ?? 8, "mediumint" => $size ?? 12, "int" => ($size ?? 16), "bigint" => $size ?? 32];
 
             if (array_key_exists($type, $text)) {
                 if (strlen($value) > $text[$type]) {
@@ -440,7 +454,7 @@ class Entity
     {
         if (!is_array($value)) {
             $data = (isset($current) && is_array($current) ? $current : []);
-            $data[] = $this->checkDataforFk($value, $title, $metadados);
+            $data[] = $this->checkDataforFk($value, $title, $metadados, $current);
 
         } else {
             $data = [];
@@ -448,13 +462,13 @@ class Entity
             foreach ($value as $i => $item) {
                 if ($i !== $indice) {
                     $data = (isset($current) && is_array($current) ? $current : []);
-                    $data[] = $this->checkDataforFk($value, $title, $metadados);
+                    $data[] = $this->checkDataforFk($value, $title, $metadados, $current);
                 }
 
                 try {
-                    $data[] = $this->checkDataforFk($item, $title, $metadados);
+                    $data[] = $this->checkDataforFk($item, $title, $metadados, $current);
                 } catch (\Exception $ex) {
-                    $this->setErro($ex->getMessage(), $ex->getLine(), $metadados['column']);
+                    $this->setErro($ex->getMessage(), $metadados['column']);
                 }
 
                 $indice++;
@@ -471,24 +485,30 @@ class Entity
      * @return mixed
      * @throws \Exception $e
      */
-    private function checkDataforFk($value, string $title, array $metadados)
+    private function checkDataforFk($value, string $title, array $metadados, $current = null)
     {
         if (empty($value)) {
             return null;
 
         } elseif (is_array($value)) {
-            $obj = new Entity($metadados['table']);
+            $obj = (!empty($current) && is_a($current, 'Entity\Entity') ? $current : new Entity($metadados['table']));
             $obj->setData($value);
             if ($obj->getErro()) {
-                throw new \Exception("Esperava um objeto Entity válido. " . PHP_EOL . $this->erroToString($obj->getErro()));
+                foreach ($obj->getErro() as $column => $mensagem) {
+                    $this->setErro($mensagem, $column, $metadados['column']);
+                }
+                return $current;
             }
             return $obj;
 
         } elseif (is_numeric($value)) {
             return DataBase::get($metadados['table'], $value);
 
+        } elseif (is_string($value)) {
+            return DataBase::get($metadados['table'], $value, Metadados::getInfo($metadados['table'])['title']);
+
         } elseif (!is_object($value) || !is_a($value, "Entity\Entity") || $metadados['table'] !== $value->getEntity()) {
-            throw new \Exception($title . " esperava um Objeto Entity -> {$metadados['table']}.");
+            throw new \Exception($title . " esperava um Objeto do tipo {$metadados['table']}.");
         }
 
         return $value;
@@ -524,7 +544,7 @@ class Entity
                     $data[$field] = $value;
                 }
             } catch (\Exception $e) {
-                $this->setErro($e->getMessage(), $e->getLine(), $field);
+                $this->setErro($e->getMessage(), $field);
             }
         }
 

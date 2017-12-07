@@ -236,7 +236,7 @@ class Metadados extends CreateEntityStorage
         $field["allowRelation"] = $field["allowRelation"] ?? "";
         $field["default"] = $field["default"] ?? "";
         $field["table"] = $field["table"] ?? "";
-        $field["col"] = $field["col"] ?? "row";
+        $field["col"] = $field["col"] ?? "";
         $field["class"] = $field["class"] ?? "";
         $field["style"] = $field["style"] ?? "";
         $field["regular"] = $field["regular"] ?? "";
