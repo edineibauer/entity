@@ -17,43 +17,6 @@ class Entity
     private static $error;
 
     /**
-     * Seta Entidade e seu dicionário
-     *
-     * @param string $entity
-     */
-    private static function setEntity(string $entity)
-    {
-        self::backup();
-        self::$edit = null;
-        self::$error = null;
-        self::$entity = $entity;
-        self::$dicionario = \EntityForm\Metadados::getDicionario($entity);
-        self::$info = \EntityForm\Metadados::getInfo($entity);
-    }
-
-    /**
-     * Faz backup das informações atuais
-     */
-    private static function backup()
-    {
-        self::$backup['dici'] = self::$dicionario;
-        self::$backup['info'] = self::$info;
-        self::$backup['entity'] = self::$entity;
-        self::$backup['edit'] = self::$edit;
-    }
-
-    /**
-     * Restaura informações armazenadas em backup
-     */
-    private static function restore()
-    {
-        self::$dicionario = self::$backup['dici'];
-        self::$info = self::$backup['info'];
-        self::$entity = self::$backup['entity'];
-        self::$edit = self::$backup['edit'];
-    }
-
-    /**
      * Retorna o erro acumulado na Entidade
      *
      * @return mixed
@@ -99,7 +62,7 @@ class Entity
             $del = new TableCrud($entity);
             $del->load($data);
             if ($del->exist()) {
-                self::deleteExtend($entity, $del->getDados());
+                self::deleteLinkedContent($entity, $del->getDados());
                 $del->delete();
             } else {
                 self::$error[$entity]['id'] = "id não encontrado para deletar";
@@ -109,7 +72,7 @@ class Entity
                 $del = new TableCrud($entity);
                 $del->loadArray($data);
                 if ($del->exist()) {
-                    self::deleteExtend($entity, $del->getDados());
+                    self::deleteLinkedContent($entity, $del->getDados());
                     $del->delete();
                 } else {
                     self::$error[$entity]['id'] = "data não encontrada para deletar";
@@ -117,38 +80,6 @@ class Entity
             } else {
                 foreach ($data as $datum)
                     self::delete($entity, $datum);
-            }
-        }
-    }
-
-    /**
-     * Deleta informações extendidas multiplas de uma entidade
-     *
-     * @param string $entity
-     * @param array $data
-     */
-    private static function deleteExtend(string $entity, array $data)
-    {
-        $info = \EntityForm\Metadados::getInfo($entity);
-        $dic = \EntityForm\Metadados::getDicionario($entity);
-        if ($info) {
-            foreach ($info['extend_mult'] as $item) {
-                $read = new Read();
-                $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'], "WHERE {$entity}_id = :id", "id={$data['id']}");
-                if ($read->getResult()) {
-                    foreach ($read->getResult() as $i) {
-                        $del = new TableCrud($dic[$item]['relation']);
-                        $del->load($i[$dic[$item]['relation'] . "_id"]);
-                        if ($del->exist())
-                            $del->delete();
-                    }
-                }
-            }
-            foreach ($info['extend'] as $item) {
-                $del = new TableCrud($dic[$item]['relation']);
-                $del->load($data[$dic[$item]['column']]);
-                if ($del->exist())
-                    $del->delete();
             }
         }
     }
@@ -195,6 +126,93 @@ class Entity
         unset($result['id']);
 
         return self::$error ? null : $result;
+    }
+
+    /**
+     * Seta Entidade e seu dicionário
+     *
+     * @param string $entity
+     */
+    private static function setEntity(string $entity)
+    {
+        self::backup();
+        self::$edit = null;
+        self::$error = null;
+        self::$entity = $entity;
+        self::$dicionario = \EntityForm\Metadados::getDicionario($entity);
+        self::$info = \EntityForm\Metadados::getInfo($entity);
+    }
+
+    /**
+     * Faz backup das informações atuais
+     */
+    private static function backup()
+    {
+        self::$backup['dici'] = self::$dicionario;
+        self::$backup['info'] = self::$info;
+        self::$backup['entity'] = self::$entity;
+        self::$backup['edit'] = self::$edit;
+    }
+
+    /**
+     * Restaura informações armazenadas em backup
+     */
+    private static function restore()
+    {
+        self::$dicionario = self::$backup['dici'];
+        self::$info = self::$backup['info'];
+        self::$entity = self::$backup['entity'];
+        self::$edit = self::$backup['edit'];
+    }
+
+    /**
+     * Deleta informações extendidas multiplas de uma entidade
+     *
+     * @param string $entity
+     * @param array $data
+     */
+    private static function deleteLinkedContent(string $entity, array $data)
+    {
+        $info = \EntityForm\Metadados::getInfo($entity);
+        $dic = \EntityForm\Metadados::getDicionario($entity);
+        if ($info) {
+
+            /*   REMOVE EXTEND MULT  */
+            foreach ($info['extend_mult'] as $item) {
+                $read = new Read();
+                $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'], "WHERE {$entity}_id = :id", "id={$data['id']}");
+                if ($read->getResult()) {
+                    foreach ($read->getResult() as $i)
+                        self::deleteExtend($dic[$item]['relation'], $i[$dic[$item]['relation'] . "_id"]);
+                }
+            }
+
+            /*   REMOVE EXTEND   */
+            foreach ($info['extend'] as $item)
+                self::deleteExtend($dic[$item]['relation'], $data[$dic[$item]['column']]);
+
+            /*   REMOVE SOURCES   */
+            foreach ($info['source'] as $type => $id) {
+                $read = new Read();
+                $read->exeRead(PRE . $entity, "WHERE id != :id && " . $dic[$id]['column'] . " = :s", "id={$data['id']}&s={$data[$dic[$id]['column']]}");
+                if(!$read->getResult())
+                    unlink(PATH_HOME . $data[$dic[$id]['column']]);
+            }
+        }
+    }
+
+    /**
+     * Deleta informações extendidas de uma entidade
+     *
+     * @param string $entity
+     * @param int $id
+     */
+    private static function deleteExtend(string $entity, int $id)
+    {
+        $del = new TableCrud($entity);
+        $del->load($id);
+        if ($del->exist())
+            $del->delete();
     }
 
     /**
