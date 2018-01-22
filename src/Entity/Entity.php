@@ -13,13 +13,54 @@ class Entity
     private static $edit;
     private static $dicionario;
     private static $info;
+    private static $backup;
     private static $error;
 
+    /**
+     * Seta Entidade e seu dicionário
+     *
+     * @param string $entity
+     */
     private static function setEntity(string $entity)
     {
+        self::backup();
+        self::$edit = null;
+        self::$error = null;
         self::$entity = $entity;
         self::$dicionario = \EntityForm\Metadados::getDicionario($entity);
         self::$info = \EntityForm\Metadados::getInfo($entity);
+    }
+
+    /**
+     * Faz backup das informações atuais
+     */
+    private static function backup()
+    {
+        self::$backup['dici'] = self::$dicionario;
+        self::$backup['info'] = self::$info;
+        self::$backup['entity'] = self::$entity;
+        self::$backup['edit'] = self::$edit;
+    }
+
+    /**
+     * Restaura informações armazenadas em backup
+     */
+    private static function restore()
+    {
+        self::$dicionario = self::$backup['dici'];
+        self::$info = self::$backup['info'];
+        self::$entity = self::$backup['entity'];
+        self::$edit = self::$backup['edit'];
+    }
+
+    /**
+     * Retorna o erro acumulado na Entidade
+     *
+     * @return mixed
+     */
+    public static function getError()
+    {
+        return self::$error;
     }
 
     /**
@@ -32,7 +73,7 @@ class Entity
     public static function add(string $entity, array $data)
     {
         self::setEntity($entity);
-        $result = null;
+        $result = 0;
 
         if (!Check::isAssoc($data)) {
             foreach ($data as $datum)
@@ -41,10 +82,221 @@ class Entity
             $result = self::addData($data);
         }
 
-        var_dump($data);
-        var_dump(self::$error);
+        self::restore();
 
-        return $result;
+        return self::$error || $result === 0 ? null : $result;
+    }
+
+    /**
+     * Deleta informações de uma entidade
+     *
+     * @param string $entity
+     * @param mixed $data
+     */
+    public static function delete(string $entity, $data)
+    {
+        if (is_int($data)) {
+            $del = new TableCrud($entity);
+            $del->load($data);
+            if ($del->exist()) {
+                self::deleteExtend($entity, $del->getDados());
+                $del->delete();
+            } else {
+                self::$error[$entity]['id'] = "id não encontrado para deletar";
+            }
+        } elseif (is_array($data)) {
+            if (Check::isAssoc($data)) {
+                $del = new TableCrud($entity);
+                $del->loadArray($data);
+                if ($del->exist()) {
+                    self::deleteExtend($entity, $del->getDados());
+                    $del->delete();
+                } else {
+                    self::$error[$entity]['id'] = "data não encontrada para deletar";
+                }
+            } else {
+                foreach ($data as $datum)
+                    self::delete($entity, $datum);
+            }
+        }
+    }
+
+    /**
+     * Deleta informações extendidas multiplas de uma entidade
+     *
+     * @param string $entity
+     * @param array $data
+     */
+    private static function deleteExtend(string $entity, array $data)
+    {
+        $info = \EntityForm\Metadados::getInfo($entity);
+        $dic = \EntityForm\Metadados::getDicionario($entity);
+        if ($info) {
+            foreach ($info['extend_mult'] as $item) {
+                $read = new Read();
+                $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'], "WHERE {$entity}_id = :id", "id={$data['id']}");
+                if ($read->getResult()) {
+                    foreach ($read->getResult() as $i) {
+                        $del = new TableCrud($dic[$item]['relation']);
+                        $del->load($i[$dic[$item]['relation'] . "_id"]);
+                        if ($del->exist())
+                            $del->delete();
+                    }
+                }
+            }
+            foreach ($info['extend'] as $item) {
+                $del = new TableCrud($dic[$item]['relation']);
+                $del->load($data[$dic[$item]['column']]);
+                if ($del->exist())
+                    $del->delete();
+            }
+        }
+    }
+
+    /**
+     * Deleta informações de uma entidade
+     *
+     * @param string $entity
+     * @param mixed $data
+     * @return mixed
+     */
+    public static function copy(string $entity, $data)
+    {
+        self::setEntity($entity);
+        $result = null;
+
+        if (is_int($data)) {
+            $copy = new TableCrud($entity);
+            $copy->load($data);
+            if ($copy->exist())
+                $result = self::copyEntity($copy->getDados());
+            else
+                self::$error[self::$entity]['id'] = "id: {$data} não encontrado para cópia";
+
+        } elseif (is_array($data)) {
+            if (Check::isAssoc($data)) {
+                $copy = new TableCrud($entity);
+                $copy->loadArray($data);
+                if ($copy->exist())
+                    $result = self::copyEntity($copy->getDados());
+                else
+                    self::$error[self::$entity]['id'] = "datas não encontrado em " . self::$entity . " para cópia";
+
+            } else {
+                foreach ($data as $datum) {
+                    if (!self::$error)
+                        $result[] = self::copy($entity, (int)$datum);
+                }
+            }
+        }
+
+        self::restore();
+
+        unset($result['id']);
+
+        return self::$error ? null : $result;
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    private static function copyEntity(array $data): array
+    {
+        foreach (self::$dicionario as $dic) {
+            if ($dic['key'] === "extend" && !self::$error)
+                $data[$dic['column']] = self::copy($dic['relation'], (int)$data[$dic['column']]);
+
+            elseif ($dic['key'] === "list")
+                $data[$dic['column']] = self::copyList($dic['relation'], (int)$data[$dic['column']]);
+
+            elseif ($dic['key'] === "extend_mult")
+                $data[$dic['column']] = self::copyEntityMult($dic, $data['id']);
+
+            elseif ($dic['key'] === "list_mult")
+                $data[$dic['column']] = self::copyListMult($dic, $data['id']);
+
+            else
+                $data[$dic['column']] = self::copyEntityData($dic, $data);
+        }
+
+        return $data;
+    }
+
+
+    /**
+     * @param array $dic
+     * @param int $id
+     * @return mixed
+     */
+    private static function copyListMult(array $dic, int $id)
+    {
+        $datas = null;
+        $read = new Read();
+        $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+        if ($read->getResult()) {
+            foreach ($read->getResult() as $item) {
+                $datas[] = self::copyList($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
+            }
+        }
+
+        return $datas;
+    }
+
+    /**
+     * @param string $entity
+     * @param int $id
+     * @return mixed
+     */
+    private static function copyList(string $entity, int $id)
+    {
+        $copy = new TableCrud($entity);
+        $copy->load($id);
+        if ($copy->exist())
+            return $copy->getDados();
+
+        return null;
+    }
+
+    /**
+     * @param array $dic
+     * @param array $data
+     * @return mixed
+     */
+    private static function copyEntityData(array $dic, array $data)
+    {
+        if ($dic['unique']) {
+            $data[$dic['column']] = rand(0, 999999) . "-" . $data[$dic['column']];
+            $read = new TableCrud(PRE . self::$entity);
+            $read->loadArray([$dic['column'] => $data[$dic['column']]]);
+            if ($read->exist())
+                $data[$dic['column']] = rand(0, 999999) . "--" . $data[$dic['column']];
+        }
+
+        if ($dic['key'] === "link")
+            $data[$dic['column']] = Check::name($data[self::$dicionario[self::$info['title']]['column']]);
+
+        return $data[$dic['column']];
+    }
+
+    /**
+     * @param array $dic
+     * @param int $id
+     * @return mixed
+     */
+    private static function copyEntityMult(array $dic, int $id)
+    {
+        $datas = null;
+        $read = new Read();
+        $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+        if ($read->getResult()) {
+            foreach ($read->getResult() as $item) {
+                if (!self::$error)
+                    $datas[] = self::copy($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
+            }
+        }
+
+        return $datas;
     }
 
     /**
@@ -60,7 +312,10 @@ class Entity
 
         $data = self::checkData($data);
 
-        return self::addDataToStore($data);
+        if (!self::$error)
+            return self::addDataToStore($data);
+
+        return 0;
     }
 
     /**
@@ -80,10 +335,10 @@ class Entity
         else
             $id = (int)self::createTableData($data);
 
-        if ($id > 0 && !self::$error && $relations)
+        if ($id > 0 && $relations)
             self::createRelationalData($id, $relations);
 
-        if($id < 1 && !self::$error)
+        if ($id < 1)
             self::$error[self::$entity]['id'] = "Erro ao salvar, id retornado 0.";
 
         return $id;
@@ -115,8 +370,10 @@ class Entity
     {
         $create = new Create();
         foreach ($relation as $entity => $list) {
-            foreach ($list as $i)
-                $create->exeCreate(PRE . self::$entity . "_" . $entity, [self::$entity . "_id" => $id, $entity . "_id" => $i]);
+            if (is_array($list)) {
+                foreach ($list as $i)
+                    $create->exeCreate(PRE . self::$entity . "_" . $entity, [self::$entity . "_id" => $id, $entity . "_id" => $i]);
+            }
         }
     }
 
@@ -126,13 +383,9 @@ class Entity
      */
     private static function createTableData(array $data): int
     {
-        if (!self::$error) {
-            $create = new TableCrud(PRE . self::$entity);
-            $create->loadArray($data);
-            return $create->save();
-        }
-
-        return 0;
+        $create = new TableCrud(PRE . self::$entity);
+        $create->loadArray($data);
+        return $create->save();
     }
 
     /**
@@ -144,16 +397,12 @@ class Entity
         $create = new TableCrud(self::$entity);
         $create->load(self::$edit);
         if ($create->exist()) {
-            if (!self::$error) {
-                $create->setDados($data);
-                $create->save();
-                return self::$edit;
-            }
-        } else {
-            return self::createTableData($data);
+            $create->setDados($data);
+            $create->save();
+            return self::$edit;
         }
 
-        return 0;
+        return self::createTableData($data);
     }
 
     /**
@@ -212,20 +461,12 @@ class Entity
      */
     private static function checkDataOne(array $dic, $dados = null)
     {
-        if ($dados && is_array($dados)) {
-            $dici = self::$dicionario;
-            $info = self::$info;
-            $entity = self::$entity;
-            $edit = self::$edit;
+        if ($dados && is_array($dados) && Check::isAssoc($dados)) {
+            $id = 0;
+            if (!self::$error)
+                $id = Entity::add($dic['relation'], $dados);
 
-            $id = Entity::add($dic['relation'], $dados);
-
-            self::$dicionario = $dici;
-            self::$info = $info;
-            self::$entity = $entity;
-            self::$edit = $edit;
-
-            return $id;
+            return $id > 0 ? $id : null;
         }
 
         return null;
@@ -380,19 +621,19 @@ class Entity
             elseif ($dic['type'] === "longtext" && strlen($value) > 4294967295)
                 self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
-            elseif ($dic['type'] === "tinyint" && $value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 8) - 1))
+            elseif ($dic['type'] === "tinyint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 8) - 1)))
                 self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
-            elseif ($dic['type'] === "smallint" && $value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 16) - 1))
+            elseif ($dic['type'] === "smallint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 16) - 1)))
                 self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
-            elseif ($dic['type'] === "mediumint" && $value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 24) - 1))
+            elseif ($dic['type'] === "mediumint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)))
                 self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
-            elseif ($dic['type'] === "int" && $value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 32) - 1))
+            elseif ($dic['type'] === "int" && !in_array($dic['key'], ["extend", "list", "list_mult", "extend_mult"]) && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)))
                 self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
-            elseif ($dic['type'] === "bigint" && $value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 64) - 1))
+            elseif ($dic['type'] === "bigint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)))
                 self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
         }
     }
