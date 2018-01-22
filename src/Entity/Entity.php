@@ -27,6 +27,48 @@ class Entity
     }
 
     /**
+     * Le a data de uma entidade de forma extendida
+     *
+     * @param string $entity
+     * @param mixed $data
+     * @return mixed
+     */
+    public static function read(string $entity, $data)
+    {
+        self::setEntity($entity);
+        $result = null;
+
+        if (is_int($data)) {
+            $copy = new TableCrud($entity);
+            $copy->load($data);
+            if ($copy->exist())
+                $result = self::readEntity($copy->getDados());
+            else
+                self::$error[self::$entity]['id'] = "id: {$data} não encontrado para leitura";
+
+        } elseif (is_array($data)) {
+            if (Check::isAssoc($data)) {
+                $copy = new TableCrud($entity);
+                $copy->loadArray($data);
+                if ($copy->exist())
+                    $result = self::readEntity($copy->getDados());
+                else
+                    self::$error[self::$entity]['id'] = "datas não encontrado em " . self::$entity . " para leitura";
+
+            } else {
+                foreach ($data as $datum) {
+                    if (!self::$error)
+                        $result[] = self::read($entity, (int)$datum);
+                }
+            }
+        }
+
+        self::restore();
+
+        return self::$error ? null : $result;
+    }
+
+    /**
      * Salva data à uma entidade
      *
      * @param string $entity
@@ -163,6 +205,43 @@ class Entity
         self::$info = self::$backup['info'];
         self::$entity = self::$backup['entity'];
         self::$edit = self::$backup['edit'];
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    private static function readEntity(array $data): array
+    {
+        foreach (self::$dicionario as $dic) {
+            if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
+                $data[$dic['column']] = self::read($dic['relation'], (int)$data[$dic['column']]);
+
+            elseif ($dic['key'] === "extend_mult")
+                $data[$dic['column']] = self::readEntityMult($dic, $data['id']);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array $dic
+     * @param int $id
+     * @return mixed
+     */
+    private static function readEntityMult(array $dic, int $id)
+    {
+        $datas = null;
+        $read = new Read();
+        $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+        if ($read->getResult()) {
+            foreach ($read->getResult() as $item) {
+                if (!self::$error)
+                    $datas[] = self::read($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
+            }
+        }
+
+        return $datas;
     }
 
     /**
