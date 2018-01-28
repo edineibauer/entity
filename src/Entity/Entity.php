@@ -33,12 +33,22 @@ class Entity
      * @param mixed $data
      * @return mixed
      */
-    public static function read(string $entity, $data)
+    public static function read(string $entity, $data = null)
     {
         self::setEntity($entity);
         $result = null;
 
-        if (is_int($data)) {
+        if(!$data) {
+            foreach (self::$dicionario as $dic) {
+                if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
+                    $result[$dic['column']] = self::read($dic['relation']);
+                elseif ($dic['key'] === "extend_mult")
+                    $result[$dic['column']] = self::readEntityMult($dic);
+                else
+                    $result[$dic['column']] = self::checkDefaultSet($dic);
+            }
+
+        } elseif (is_int($data)) {
             $copy = new TableCrud($entity);
             $copy->load($data);
             if ($copy->exist())
@@ -226,18 +236,20 @@ class Entity
 
     /**
      * @param array $dic
-     * @param int $id
+     * @param mixed $id
      * @return mixed
      */
-    private static function readEntityMult(array $dic, int $id)
+    private static function readEntityMult(array $dic, $id = null)
     {
         $datas = null;
-        $read = new Read();
-        $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
-        if ($read->getResult()) {
-            foreach ($read->getResult() as $item) {
-                if (!self::$error)
-                    $datas[] = self::read($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
+        if($id) {
+            $read = new Read();
+            $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+            if ($read->getResult()) {
+                foreach ($read->getResult() as $item) {
+                    if (!self::$error)
+                        $datas[] = self::read($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
+                }
             }
         }
 
@@ -622,22 +634,17 @@ class Entity
      * @param mixed $value
      * @return mixed
      */
-    private static function checkDefaultSet(array $dic, $value)
+    private static function checkDefaultSet(array $dic, $value = null)
     {
-        if (empty($value)) {
-            switch ($dic['default']) {
-                case "datetime":
-                    return date("Y-m-d H:i:s");
-                    break;
-                case "date":
-                    return date("Y-m-d");
-                    break;
-                case "time":
-                    return date("H:i:s");
-                    break;
-                default:
-                    return $dic['default'];
-            }
+        if (!$value || empty($value)) {
+            if($dic['default'] === "datetime")
+                return date("Y-m-d H:i:s");
+            elseif($dic['default'] === "date")
+                return date("Y-m-d");
+            elseif($dic['default'] === "time")
+                return date("H:i:s");
+            else
+                return $dic['default'];
         }
 
         return $value;
