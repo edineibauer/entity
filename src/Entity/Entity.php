@@ -5,6 +5,8 @@ namespace Entity;
 use ConnCrud\Create;
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
+use ConnCrud\Update;
+use EntityForm\Metadados;
 use Helpers\Check;
 
 class Entity
@@ -14,6 +16,7 @@ class Entity
     private static $dicionario;
     private static $info;
     private static $backup;
+    private static $iterator = 0;
     private static $error;
 
     /**
@@ -38,7 +41,7 @@ class Entity
         self::setEntity($entity);
         $result = null;
 
-        if(!$data) {
+        if (!$data) {
             foreach (self::$dicionario as $dic) {
                 if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
                     $result[$dic['column']] = self::read($dic['relation']);
@@ -87,19 +90,18 @@ class Entity
      */
     public static function add(string $entity, array $data)
     {
-        self::setEntity($entity);
-        $result = 0;
+        self::$error = null;
 
         if (!Check::isAssoc($data)) {
+            $result = [];
             foreach ($data as $datum)
-                $result[] = self::addData($datum);
+                $result[] = self::addData($entity, $datum);
+
+            return $result;
         } else {
-            $result = self::addData($data);
+
+            return self::addData($entity, $data);
         }
-
-        self::restore();
-
-        return self::$error || $result === 0 ? null : $result;
     }
 
     /**
@@ -200,10 +202,13 @@ class Entity
      */
     private static function backup()
     {
-        self::$backup['dici'] = self::$dicionario;
-        self::$backup['info'] = self::$info;
-        self::$backup['entity'] = self::$entity;
-        self::$backup['edit'] = self::$edit;
+        if (self::$entity) {
+            self::$iterator++;
+            self::$backup[self::$iterator]['dici'] = self::$dicionario;
+            self::$backup[self::$iterator]['info'] = self::$info;
+            self::$backup[self::$iterator]['entity'] = self::$entity;
+            self::$backup[self::$iterator]['edit'] = self::$edit;
+        }
     }
 
     /**
@@ -211,10 +216,13 @@ class Entity
      */
     private static function restore()
     {
-        self::$dicionario = self::$backup['dici'];
-        self::$info = self::$backup['info'];
-        self::$entity = self::$backup['entity'];
-        self::$edit = self::$backup['edit'];
+        if (self::$iterator > 0) {
+            self::$dicionario = self::$backup[self::$iterator]['dici'];
+            self::$info = self::$backup[self::$iterator]['info'];
+            self::$entity = self::$backup[self::$iterator]['entity'];
+            self::$edit = self::$backup[self::$iterator]['edit'];
+            self::$iterator--;
+        }
     }
 
     /**
@@ -242,7 +250,7 @@ class Entity
     private static function readEntityMult(array $dic, $id = null)
     {
         $datas = null;
-        if($id) {
+        if ($id) {
             $read = new Read();
             $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
             if ($read->getResult()) {
@@ -266,28 +274,34 @@ class Entity
     {
         $info = \EntityForm\Metadados::getInfo($entity);
         $dic = \EntityForm\Metadados::getDicionario($entity);
-        if ($info) {
+        if ($info && isset($data['id'])) {
 
             /*   REMOVE EXTEND MULT  */
-            foreach ($info['extend_mult'] as $item) {
-                $read = new Read();
-                $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'], "WHERE {$entity}_id = :id", "id={$data['id']}");
-                if ($read->getResult()) {
-                    foreach ($read->getResult() as $i)
-                        self::deleteExtend($dic[$item]['relation'], $i[$dic[$item]['relation'] . "_id"]);
+            if ($info['extend_mult']) {
+                foreach ($info['extend_mult'] as $item) {
+                    $read = new Read();
+                    $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'], "WHERE {$entity}_id = :id", "id={$data['id']}");
+                    if ($read->getResult()) {
+                        foreach ($read->getResult() as $i)
+                            self::deleteExtend($dic[$item]['relation'], $i[$dic[$item]['relation'] . "_id"]);
+                    }
                 }
             }
 
             /*   REMOVE EXTEND   */
-            foreach ($info['extend'] as $item)
-                self::deleteExtend($dic[$item]['relation'], $data[$dic[$item]['column']]);
+            if ($info['extend']) {
+                foreach ($info['extend'] as $item)
+                    self::deleteExtend($dic[$item]['relation'], $data[$dic[$item]['column']]);
+            }
 
             /*   REMOVE SOURCES   */
-            foreach ($info['source'] as $type => $id) {
-                $read = new Read();
-                $read->exeRead(PRE . $entity, "WHERE id != :id && " . $dic[$id]['column'] . " = :s", "id={$data['id']}&s={$data[$dic[$id]['column']]}");
-                if(!$read->getResult())
-                    unlink(PATH_HOME . $data[$dic[$id]['column']]);
+            foreach ($dic as $id => $c) {
+                if ($c['key'] === "source" && !empty($data[$c['column']])) {
+                    $read = new Read();
+                    $read->exeRead(PRE . $entity, "WHERE id != :id && " . $c['column'] . " = :s", "id={$data['id']}&s={$data[$c['column']]}");
+                    if (!$read->getResult() && file_exists(PATH_HOME . $data[$c['column']]))
+                        unlink(PATH_HOME . $data[$c['column']]);
+                }
             }
         }
     }
@@ -409,61 +423,106 @@ class Entity
     }
 
     /**
+     * @param string $entity
      * @param array $data
-     * @return int
+     * @return mixed
      */
-    private static function addData(array $data): int
+    private static function addData(string $entity, array $data)
     {
-        if (isset($data['id'])) {
-            self::$edit = $data['id'];
-            unset($data['id']);
-        }
-
-        $data = self::checkData($data);
+        $info = Metadados::getInfo($entity);
+        $dicionario = Metadados::getDicionario($entity);
+        $data = self::validateData($entity, $data, $info, $dicionario);
 
         if (!self::$error)
-            return self::addDataToStore($data);
+            $id = self::storeData($entity, $data, $info, $dicionario);
 
-        return 0;
+        return self::$error ?? $id;
     }
 
     /**
+     * @param string $entity
      * @param array $data
-     * @return int
+     * @param array $info
+     * @param array $dicionario
+     * @return mixed
      */
-    private static function addDataToStore(array $data): int
+    private static function validateData(string $entity, array $data, array $info, array $dicionario)
     {
-        $id = null;
 
-        $relations = self::splitRelation($data);
-        $data = $relations['data'];
-        $relations = $relations['relation'];
+        foreach ($dicionario as $i => $dic) {
+            if (in_array($dic['key'], ["extend", "list"]))
+                $data[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
+            elseif (in_array($dic['key'], ["extend_mult", "list_mult"]))
+                $data[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
+            else
+                $data[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
+        }
 
-        if (self::$edit)
-            $id = (int)self::updateTableData($data);
-        else
-            $id = (int)self::createTableData($data);
+        return self::$error ? null : $data;
+    }
 
-        if ($id > 0 && $relations)
-            self::createRelationalData($id, $relations);
+    /**
+     * Armazena data no banco
+     *
+     * @param string $entity
+     * @param array $data
+     * @param array $info
+     * @param array $dicionario
+     * @return mixed
+     */
+    private static function storeData(string $entity, array $data, array $info, array $dicionario)
+    {
+        foreach (["extend", "list"] as $e) {
+            if ($info[$e]) {
+                foreach ($info[$e] as $i) {
+                    $eInfo = Metadados::getInfo($dicionario[$i]['relation']);
+                    $eDic = Metadados::getDicionario($dicionario[$i]['relation']);
+                    $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], $eInfo, $eDic);
+                }
+            }
+        }
 
-        if ($id < 1)
-            self::$error[self::$entity]['id'] = "Erro ao salvar, id retornado 0.";
+        $relation = null;
+        foreach (["extend_mult", "list_mult"] as $e) {
+            if ($info[$e]) {
+                foreach ($info[$e] as $i) {
+                    $lInfo = Metadados::getInfo($dicionario[$i]['relation']);
+                    $lDic = Metadados::getDicionario($dicionario[$i]['relation']);
+
+                    foreach ($data[$dicionario[$i]['column']] as $datum) {
+                        $relation[$dicionario[$i]['relation']][] = self::storeData($dicionario[$i]['relation'], $datum, $lInfo, $lDic);
+                    }
+                    unset($data[$dicionario[$i]['column']]);
+                }
+            }
+        }
+
+        $id = (!empty($data['id']) ? self::updateTableData($entity, $data) : self::createTableData($entity, $data));
+
+        if (!$id)
+            self::$error[$entity]['id'] = "Erro ao Salvar no Banco";
+        elseif ($relation)
+            self::createRelationalData($entity, $id, $relation);
 
         return $id;
     }
 
     /**
      * @param array $data
+     * @param array $info
+     * @param array $dicionario
      * @return array
      */
-    private static function splitRelation(array $data): array
+    private static function splitRelation(array $data, array $info, array $dicionario): array
     {
         $relation = null;
-        foreach (self::$dicionario as $i => $dic) {
-            if (in_array($dic['key'], ["extend_mult", "list_mult"])) {
-                $relation[$dic['relation']] = $data[$dic['column']];
-                unset($data[$dic['column']]);
+
+        foreach (["extend_mult", "list_mult"] as $e) {
+            if ($info[$e]) {
+                foreach ($info[$e] as $i) {
+                    $relation[$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
+                    unset($data[$dicionario[$i]['column']]);
+                }
             }
         }
 
@@ -472,110 +531,108 @@ class Entity
 
 
     /**
+     * @param string $entity
      * @param int $id
      * @param array $relation
      */
-    private static function createRelationalData(int $id, array $relation)
+    private static function createRelationalData(string $entity, int $id, array $relation)
     {
+        $read = new Read();
         $create = new Create();
-        foreach ($relation as $entity => $list) {
+        foreach ($relation as $e => $list) {
             if (is_array($list)) {
-                foreach ($list as $i)
-                    $create->exeCreate(PRE . self::$entity . "_" . $entity, [self::$entity . "_id" => $id, $entity . "_id" => $i]);
+                foreach ($list as $i) {
+                    $read->exeRead(PRE . $entity . "_" . $e, "WHERE {$entity}_id = :eid && {$e}_id = :iid", "eid={$id}&iid={$i}");
+                    if (!$read->getResult())
+                        $create->exeCreate(PRE . $entity . "_" . $e, [$entity . "_id" => $id, $e . "_id" => $i]);
+                }
             }
         }
     }
 
     /**
-     * @param array $data
-     * @return int
-     */
-    private static function createTableData(array $data): int
-    {
-        $create = new TableCrud(PRE . self::$entity);
-        $create->loadArray($data);
-        return $create->save();
-    }
-
-    /**
-     * @param array $data
-     * @return int
-     */
-    private static function updateTableData(array $data): int
-    {
-        $create = new TableCrud(self::$entity);
-        $create->load(self::$edit);
-        if ($create->exist()) {
-            $create->setDados($data);
-            $create->save();
-            return self::$edit;
-        }
-
-        return self::createTableData($data);
-    }
-
-    /**
-     * Verifica se os valores passados corrêspondem ao que é permitido para a entidade
-     *
+     * @param string $entity
      * @param array $data
      * @return mixed
      */
-    private static function checkData(array $data)
+    private static function createTableData(string $entity, array $data)
     {
-        foreach (self::$dicionario as $i => $dic) {
-            $data[$dic['column']] = $data[$dic['column']] ?? null;
-
-            if (in_array($dic['key'], ["extend", "list"]))
-                $data[$dic['column']] = self::checkDataOne($dic, $data[$dic['column']]);
-            elseif (in_array($dic['key'], ["extend_mult", "list_mult"]))
-                $data[$dic['column']] = self::checkDataMult($dic, $data[$dic['column']]);
-            else
-                $data[$dic['column']] = self::checkDataEntity($dic, $data);
-        }
-
-        if (self::$error)
-            return null;
-
-        return $data;
+        unset($data['id']);
+        $create = new Create();
+        $create->exeCreate(PRE . $entity, $data);
+        return $create->getResult();
     }
 
     /**
+     * @param string $entity
+     * @param array $data
+     * @return mixed
+     */
+    private static function updateTableData(string $entity, array $data)
+    {
+        $read = new Read();
+        $read->exeRead(PRE . $entity, "WHERE id=:id", "id={$data['id']}");
+        if ($read->getResult()) {
+            $up = new Update();
+            $up->exeUpdate(PRE . $entity, $data, "WHERE id=:id", "id={$data['id']}");
+            if ($up->getResult())
+                return $data['id'];
+        }
+
+        return self::createTableData($entity, $data);
+    }
+
+    /**
+     * @param string $entity
+     * @param array $data
      * @param array $dic
-     * @param array $data
+     * @param array $dicionario
+     * @param array $info
      * @return mixed
      */
-    private static function checkDataEntity(array $dic, array $data)
+    private static function checkData(string $entity, array $data, array $dic, array $dicionario, array $info)
     {
-        $data[$dic['column']] = self::checkLink($dic, $data);
+        $data[$dic['column']] = $data[$dic['column']] ?? null;
+        $data[$dic['column']] = self::checkLink($data, $dic, $dicionario, $info);
+        self::checkNullSet($entity, $dic, $data[$dic['column']]);
 
-        self::checkNullSet($dic, $data[$dic['column']]);
+        if (!self::$error) {
+            $data[$dic['column']] = self::checkDefaultSet($dic, $data[$dic['column']]);
 
-        $data[$dic['column']] = self::checkDefaultSet($dic, $data[$dic['column']]);
-
-        self::checkType($dic, $data[$dic['column']]);
-        self::checkSize($dic, $data[$dic['column']]);
-        self::checkUnique($dic, $data[$dic['column']]);
-        self::checkRegular($dic, $data[$dic['column']]);
-        self::checkValidate($dic, $data[$dic['column']]);
-        self::checkValues($dic, $data[$dic['column']]);
+            if (!self::$error)
+                self::checkType($entity, $dic, $data[$dic['column']]);
+            if (!self::$error)
+                self::checkSize($entity, $dic, $data[$dic['column']]);
+            if (!self::$error)
+                self::checkUnique($entity, $dic, $data[$dic['column']], $data['id'] ?? null);
+            if (!self::$error)
+                self::checkRegular($entity, $dic, $data[$dic['column']]);
+            if (!self::$error)
+                self::checkValidate($entity, $dic, $data[$dic['column']]);
+            if (!self::$error)
+                self::checkValues($entity, $dic, $data[$dic['column']]);
+        }
 
         return $data[$dic['column']];
     }
 
     /**
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $dados
      * @return mixed
      */
-    private static function checkDataOne(array $dic, $dados = null)
+    private static function checkDataOne(string $entity, array $dic, $dados = null)
     {
         if ($dados && is_array($dados) && Check::isAssoc($dados)) {
-            $id = 0;
-            if (!self::$error)
-                $id = Entity::add($dic['relation'], $dados);
+            $data = Entity::validateData($dic['relation'], $dados, Metadados::getInfo($dic['relation']), Metadados::getDicionario($dic['relation']));
 
-            return $id > 0 ? $id : null;
+            if ($data)
+                return $data;
+
+            self::$error[$entity][$dic['column']] = self::$error[$dic['relation']];
+            unset(self::$error[$dic['relation']]);
         }
 
         return null;
@@ -583,16 +640,17 @@ class Entity
 
     /**
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $dados
      * @return mixed
      */
-    private static function checkDataMult(array $dic, $dados = null)
+    private static function checkDataMult(string $entity, array $dic, $dados = null)
     {
         if ($dados && is_array($dados)) {
             $results = null;
             foreach ($dados as $dado)
-                $results[] = self::checkDataOne($dic, $dado);
+                $results[] = self::checkDataOne($entity, $dic, $dado);
 
             return $results;
         }
@@ -603,26 +661,29 @@ class Entity
     /**
      * Verifica se o valor submetido é inválido ao desejado
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
      */
-    private static function checkNullSet(array $dic, $value)
+    private static function checkNullSet(string $entity, array $dic, $value)
     {
         if ($dic['default'] === false && empty($value))
-            self::$error[self::$entity][$dic['column']] = "campo necessário";
+            self::$error[$entity][$dic['column']] = "campo necessário";
     }
 
     /**
      * Verifica se o campo é do tipo link, se for, linka o valor ao título
      *
-     * @param array $dic
      * @param array $dados
+     * @param array $dic
+     * @param array $dicionario
+     * @param array $info
      * @return mixed
      */
-    private static function checkLink(array $dic, array $dados)
+    private static function checkLink(array $dados, array $dic, array $dicionario, array $info)
     {
-        if ($dic['key'] === "link" && self::$info['title'] !== null && !empty($dados[self::$dicionario[self::$info['title']]['column']]))
-            return Check::name($dados[self::$dicionario[self::$info['title']]['column']]);
+        if ($dic['key'] === "link" && $info['title'] !== null && !empty($dados[$dicionario[$info['title']]['column']]))
+            return Check::name($dados[$dicionario[$info['title']]['column']]);
 
         return $dados[$dic['column']];
     }
@@ -637,14 +698,21 @@ class Entity
     private static function checkDefaultSet(array $dic, $value = null)
     {
         if (!$value || empty($value)) {
-            if($dic['default'] === "datetime")
+            if ($dic['default'] === "datetime")
                 return date("Y-m-d H:i:s");
-            elseif($dic['default'] === "date")
+            elseif ($dic['default'] === "date")
                 return date("Y-m-d");
-            elseif($dic['default'] === "time")
+            elseif ($dic['default'] === "time")
                 return date("H:i:s");
             else
                 return $dic['default'];
+
+        } elseif ($dic['type'] === "json" && is_array($value)) {
+            $d = [];
+            foreach ($value as $i => $v)
+                $d[$i] = (int)$v;
+
+            $value = json_encode($d);
         }
 
         return $value;
@@ -653,47 +721,52 @@ class Entity
     /**
      * Verifica se o tipo do campo é o desejado
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
      */
-    private static function checkType(array $dic, $value)
+    private static function checkType(string $entity, array $dic, $value)
     {
         if (!empty($value)) {
             if (in_array($dic['type'], array("tinyint", "smallint", "mediumint", "int", "bigint"))) {
                 if (!is_numeric($value))
-                    self::$error[self::$entity][$dic['column']] = "número inválido";
+                    self::$error[$entity][$dic['column']] = "número inválido";
 
             } elseif ($dic['type'] === "decimal") {
                 $size = (!empty($dic['size']) ? explode(',', str_replace(array('(', ')'), '', $dic['size'])) : array(10, 30));
                 $val = explode('.', str_replace(',', '.', $value));
                 if (strlen($val[1]) > $size[1])
-                    self::$error[self::$entity][$dic['column']] = "valor das casas decimais excedido. Max {$size[1]}";
+                    self::$error[$entity][$dic['column']] = "valor das casas decimais excedido. Max {$size[1]}";
                 elseif (strlen($val[0]) > $size[0])
-                    self::$error[self::$entity][$dic['column']] = "valor inteiro do valor decimal excedido. Max {$size[0]}";
+                    self::$error[$entity][$dic['column']] = "valor inteiro do valor decimal excedido. Max {$size[0]}";
 
             } elseif (in_array($dic['type'], array("double", "real"))) {
                 if (!is_double($value))
-                    self::$error[self::$entity][$dic['column']] = "valor double não válido";
+                    self::$error[$entity][$dic['column']] = "valor double não válido";
 
             } elseif ($dic['type'] === "float") {
                 if (!is_float($value))
-                    self::$error[self::$entity][$dic['column']] = "valor flutuante não é válido";
+                    self::$error[$entity][$dic['column']] = "valor flutuante não é válido";
 
             } elseif (in_array($dic['type'], array("bit", "boolean", "serial"))) {
                 if (!is_bool($value))
-                    self::$error[self::$entity][$dic['column']] = "valor boleano inválido. (true ou false)";
+                    self::$error[$entity][$dic['column']] = "valor boleano inválido. (true ou false)";
 
             } elseif (in_array($dic['type'], array("datetime", "timestamp"))) {
                 if (!preg_match('/\d{4}-\d{2}-\d{2}[T\s]+\d{2}:\d{2}/i', $value))
-                    self::$error[self::$entity][$dic['column']] = "formato de data inválido ex válido:(2017-08-23 21:58:00)";
+                    self::$error[$entity][$dic['column']] = "formato de data inválido ex válido:(2017-08-23 21:58:00)";
 
             } elseif ($dic['type'] === "date") {
                 if (!preg_match('/\d{4}-\d{2}-\d{2}/i', $value))
-                    self::$error[self::$entity][$dic['column']] = "formato de data inválido ex válido:(2017-08-23)";
+                    self::$error[$entity][$dic['column']] = "formato de data inválido ex válido:(2017-08-23)";
 
             } elseif ($dic['type'] === "time") {
                 if (!preg_match('/\d{2}:\d{2}/i', $value))
-                    self::$error[self::$entity][$dic['column']] = "formato de tempo inválido ex válido:(21:58)";
+                    self::$error[$entity][$dic['column']] = "formato de tempo inválido ex válido:(21:58)";
+
+            } elseif ($dic['type'] === "json") {
+                if (!is_string($value))
+                    self::$error[$entity][$dic['column']] = "formato json inválido";
             }
         }
     }
@@ -701,96 +774,101 @@ class Entity
     /**
      * Verifica se o tamanho do valor corresponde ao desejado
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
      */
-    private static function checkSize(array $dic, $value)
+    private static function checkSize(string $entity, array $dic, $value)
     {
         if ($dic['size']) {
             if ($dic['type'] === "varchar" && strlen($value) > $dic['size'])
-                self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
+                self::$error[$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
             elseif ($dic['type'] === "char" && strlen($value) > 1)
-                self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
+                self::$error[$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
             elseif ($dic['type'] === "tinytext" && strlen($value) > 255)
-                self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
+                self::$error[$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
             elseif ($dic['type'] === "text" && strlen($value) > 65535)
-                self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
+                self::$error[$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
             elseif ($dic['type'] === "mediumtext" && strlen($value) > 16777215)
-                self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
+                self::$error[$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
             elseif ($dic['type'] === "longtext" && strlen($value) > 4294967295)
-                self::$error[self::$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
+                self::$error[$entity][$dic['column']] = "tamanho máximo de caracteres excedido. Max {$dic['size']}";
 
             elseif ($dic['type'] === "tinyint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 8) - 1)))
-                self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
+                self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
             elseif ($dic['type'] === "smallint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 16) - 1)))
-                self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
+                self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
             elseif ($dic['type'] === "mediumint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)))
-                self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
+                self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
             elseif ($dic['type'] === "int" && !in_array($dic['key'], ["extend", "list", "list_mult", "extend_mult"]) && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)))
-                self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
+                self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
             elseif ($dic['type'] === "bigint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)))
-                self::$error[self::$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
+                self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
         }
     }
 
     /**
      * Verifica se o valor precisa ser único
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
+     * @param mixed $id
      */
-    private static function checkUnique(array $dic, $value)
+    private static function checkUnique(string $entity, array $dic, $value, $id = null)
     {
         if ($dic['unique']) {
             $read = new Read();
-            $read->exeRead(PRE . self::$entity, "WHERE {$dic['column']} = '{$value}'" . (self::$edit ? " && id != " . self::$edit : ""));
+            $read->exeRead(PRE . $entity, "WHERE {$dic['column']} = '{$value}'" . ($id ? " && id != " . $id : ""));
             if ($read->getResult())
-                self::$error[self::$entity][$dic['column']] = "precisa ser único";
+                self::$error[$entity][$dic['column']] = "precisa ser único";
         }
     }
 
     /**
      * Verifica se existe expressão regular, e se existe, aplica a verificação
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
      */
-    private static function checkRegular(array $dic, $value)
+    private static function checkRegular(string $entity, array $dic, $value)
     {
         if (!empty($dic['allow']['regex']) && !empty($value) && is_string($value) && !preg_match($dic['allow']['regex'], $value))
-            self::$error[self::$entity][$dic['column']] = "formato não permitido.";
+            self::$error[$entity][$dic['column']] = "formato não permitido.";
     }
 
     /**
      * Verifica se o campo precisa de validação pré-formatada
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
      */
-    private static function checkValidate(array $dic, $value)
+    private static function checkValidate(string $entity, array $dic, $value)
     {
         if (!empty($dic['allow']['validate']) && !empty($value)) {
             switch ($dic['allow']['validate']) {
                 case 'email':
                     if (!Check::email($value))
-                        self::$error[self::$entity][$dic['column']] = "email inválido.";
+                        self::$error[$entity][$dic['column']] = "email inválido.";
                     break;
                 case 'cpf':
                     if (!Check::cpf($value))
-                        self::$error[self::$entity][$dic['column']] = "CPF inválido.";
+                        self::$error[$entity][$dic['column']] = "CPF inválido.";
                     break;
                 case 'cnpj':
                     if (!Check::cnpj($value))
-                        self::$error[self::$entity][$dic['column']] = "CNPJ inválido.";
+                        self::$error[$entity][$dic['column']] = "CNPJ inválido.";
                     break;
             }
         }
@@ -799,12 +877,13 @@ class Entity
     /**
      * Verifica se existem valores exatos permitidos
      *
+     * @param string $entity
      * @param array $dic
      * @param mixed $value
      */
-    private static function checkValues(array $dic, $value)
+    private static function checkValues(string $entity, array $dic, $value)
     {
         if (!empty($dic['allow']['values']) && !empty($value) && !in_array($value, $dic['allow']['values']))
-            self::$error[self::$entity][$dic['column']] = "valor não é permitido";
+            self::$error[$entity][$dic['column']] = "valor não é permitido";
     }
 }
