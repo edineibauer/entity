@@ -40,7 +40,7 @@ class Entity
                 if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
                     $result[$dic['column']] = self::read($dic['relation']);
                 elseif ($dic['key'] === "extend_mult")
-                    $result[$dic['column']] = self::readEntityMult($dic);
+                    $result[$dic['column']] = self::readEntityMult($entity, $dic);
                 else
                     $result[$dic['column']] = self::checkDefaultSet($dic);
             }
@@ -220,8 +220,8 @@ class Entity
      */
     private static function deleteLinkedContent(string $entity, array $data)
     {
-        $info = \EntityForm\Metadados::getInfo($entity);
-        $dic = \EntityForm\Metadados::getDicionario($entity);
+        $info = Metadados::getInfo($entity);
+        $dic = Metadados::getDicionario($entity);
         if ($info && isset($data['id'])) {
 
             /*   REMOVE EXTEND MULT  */
@@ -385,6 +385,7 @@ class Entity
     {
         $info = Metadados::getInfo($entity);
         $dicionario = Metadados::getDicionario($entity);
+        $id = null;
 
         $data = self::validateData($entity, $data, $info, $dicionario);
 
@@ -463,29 +464,6 @@ class Entity
 
         return $id;
     }
-
-    /**
-     * @param array $data
-     * @param array $info
-     * @param array $dicionario
-     * @return array
-     */
-    private static function splitRelation(array $data, array $info, array $dicionario): array
-    {
-        $relation = null;
-
-        foreach (["extend_mult", "list_mult"] as $e) {
-            if ($info[$e]) {
-                foreach ($info[$e] as $i) {
-                    $relation[$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
-                    unset($data[$dicionario[$i]['column']]);
-                }
-            }
-        }
-
-        return ["relation" => $relation, "data" => $data];
-    }
-
 
     /**
      * @param string $entity
