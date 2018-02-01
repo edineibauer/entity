@@ -11,12 +11,6 @@ use Helpers\Check;
 
 class Entity
 {
-    private static $entity;
-    private static $edit;
-    private static $dicionario;
-    private static $info;
-    private static $backup;
-    private static $iterator = 0;
     private static $error;
 
     /**
@@ -38,11 +32,11 @@ class Entity
      */
     public static function read(string $entity, $data = null)
     {
-        self::setEntity($entity);
+        $dicionario = Metadados::getDicionario($entity);
         $result = null;
 
         if (!$data) {
-            foreach (self::$dicionario as $dic) {
+            foreach ($dicionario as $dic) {
                 if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
                     $result[$dic['column']] = self::read($dic['relation']);
                 elseif ($dic['key'] === "extend_mult")
@@ -51,22 +45,22 @@ class Entity
                     $result[$dic['column']] = self::checkDefaultSet($dic);
             }
 
-        } elseif (is_int($data)) {
+        } elseif (is_numeric($data)) {
             $copy = new TableCrud($entity);
             $copy->load($data);
             if ($copy->exist())
-                $result = self::readEntity($copy->getDados());
+                $result = self::readEntity($copy->getDados(), $dicionario);
             else
-                self::$error[self::$entity]['id'] = "id: {$data} não encontrado para leitura";
+                self::$error[$entity]['id'] = "id: {$data} não encontrado para leitura";
 
         } elseif (is_array($data)) {
             if (Check::isAssoc($data)) {
                 $copy = new TableCrud($entity);
                 $copy->loadArray($data);
                 if ($copy->exist())
-                    $result = self::readEntity($copy->getDados());
+                    $result = self::readEntity($copy->getDados(), $dicionario);
                 else
-                    self::$error[self::$entity]['id'] = "datas não encontrado em " . self::$entity . " para leitura";
+                    self::$error[$entity]['id'] = "datas não encontrado em " . $entity . " para leitura";
 
             } else {
                 foreach ($data as $datum) {
@@ -75,8 +69,6 @@ class Entity
                 }
             }
         }
-
-        self::restore();
 
         return self::$error ? null : $result;
     }
@@ -147,25 +139,25 @@ class Entity
      */
     public static function copy(string $entity, $data)
     {
-        self::setEntity($entity);
         $result = null;
+        $dicionario = Metadados::getDicionario($entity);
 
         if (is_int($data)) {
             $copy = new TableCrud($entity);
             $copy->load($data);
             if ($copy->exist())
-                $result = self::copyEntity($copy->getDados());
+                $result = self::copyEntity($entity, $copy->getDados(), $dicionario);
             else
-                self::$error[self::$entity]['id'] = "id: {$data} não encontrado para cópia";
+                self::$error[$entity]['id'] = "id: {$data} não encontrado para cópia";
 
         } elseif (is_array($data)) {
             if (Check::isAssoc($data)) {
                 $copy = new TableCrud($entity);
                 $copy->loadArray($data);
                 if ($copy->exist())
-                    $result = self::copyEntity($copy->getDados());
+                    $result = self::copyEntity($entity, $copy->getDados(), $dicionario);
                 else
-                    self::$error[self::$entity]['id'] = "datas não encontrado em " . self::$entity . " para cópia";
+                    self::$error[$entity]['id'] = "datas não encontrado em " . $entity . " para cópia";
 
             } else {
                 foreach ($data as $datum) {
@@ -174,64 +166,19 @@ class Entity
                 }
             }
         }
-
-        self::restore();
-
         unset($result['id']);
 
         return self::$error ? null : $result;
     }
 
     /**
-     * Seta Entidade e seu dicionário
-     *
-     * @param string $entity
-     */
-    private static function setEntity(string $entity)
-    {
-        self::backup();
-        self::$edit = null;
-        self::$error = null;
-        self::$entity = $entity;
-        self::$dicionario = \EntityForm\Metadados::getDicionario($entity);
-        self::$info = \EntityForm\Metadados::getInfo($entity);
-    }
-
-    /**
-     * Faz backup das informações atuais
-     */
-    private static function backup()
-    {
-        if (self::$entity) {
-            self::$iterator++;
-            self::$backup[self::$iterator]['dici'] = self::$dicionario;
-            self::$backup[self::$iterator]['info'] = self::$info;
-            self::$backup[self::$iterator]['entity'] = self::$entity;
-            self::$backup[self::$iterator]['edit'] = self::$edit;
-        }
-    }
-
-    /**
-     * Restaura informações armazenadas em backup
-     */
-    private static function restore()
-    {
-        if (self::$iterator > 0) {
-            self::$dicionario = self::$backup[self::$iterator]['dici'];
-            self::$info = self::$backup[self::$iterator]['info'];
-            self::$entity = self::$backup[self::$iterator]['entity'];
-            self::$edit = self::$backup[self::$iterator]['edit'];
-            self::$iterator--;
-        }
-    }
-
-    /**
      * @param array $data
+     * @param array $dicionario
      * @return array
      */
-    private static function readEntity(array $data): array
+    private static function readEntity(array $data, array $dicionario): array
     {
-        foreach (self::$dicionario as $dic) {
+        foreach ($dicionario as $dic) {
             if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
                 $data[$dic['column']] = self::read($dic['relation'], (int)$data[$dic['column']]);
 
@@ -243,16 +190,17 @@ class Entity
     }
 
     /**
+     * @param string $entity
      * @param array $dic
      * @param mixed $id
      * @return mixed
      */
-    private static function readEntityMult(array $dic, $id = null)
+    private static function readEntityMult(string $entity, array $dic, $id = null)
     {
         $datas = null;
         if ($id) {
             $read = new Read();
-            $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+            $read->exeRead(PRE . $entity . "_" . $dic['relation'], "WHERE " . $entity . "_id = :id", "id={$id}");
             if ($read->getResult()) {
                 foreach ($read->getResult() as $item) {
                     if (!self::$error)
@@ -321,12 +269,14 @@ class Entity
     }
 
     /**
+     * @param string $entity
+     * @param array $dicionario
      * @param array $data
      * @return array
      */
-    private static function copyEntity(array $data): array
+    private static function copyEntity(string $entity, array $data, array $dicionario): array
     {
-        foreach (self::$dicionario as $dic) {
+        foreach ($dicionario as $dic) {
             if ($dic['key'] === "extend" && !self::$error)
                 $data[$dic['column']] = self::copy($dic['relation'], (int)$data[$dic['column']]);
 
@@ -334,13 +284,13 @@ class Entity
                 $data[$dic['column']] = self::copyList($dic['relation'], (int)$data[$dic['column']]);
 
             elseif ($dic['key'] === "extend_mult")
-                $data[$dic['column']] = self::copyEntityMult($dic, $data['id']);
+                $data[$dic['column']] = self::copyEntityMult($entity, $dic, $data['id']);
 
             elseif ($dic['key'] === "list_mult")
-                $data[$dic['column']] = self::copyListMult($dic, $data['id']);
+                $data[$dic['column']] = self::copyListMult($entity, $dic, $data['id']);
 
             else
-                $data[$dic['column']] = self::copyEntityData($dic, $data);
+                $data[$dic['column']] = self::copyEntityData($entity, $dic, $data, $dicionario);
         }
 
         return $data;
@@ -348,15 +298,16 @@ class Entity
 
 
     /**
+     * @param string $entity
      * @param array $dic
      * @param int $id
      * @return mixed
      */
-    private static function copyListMult(array $dic, int $id)
+    private static function copyListMult(string $entity, array $dic, int $id)
     {
         $datas = null;
         $read = new Read();
-        $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+        $read->exeRead(PRE . $entity . "_" . $dic['relation'], "WHERE " . $entity . "_id = :id", "id={$id}");
         if ($read->getResult()) {
             foreach ($read->getResult() as $item) {
                 $datas[] = self::copyList($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
@@ -382,36 +333,39 @@ class Entity
     }
 
     /**
+     * @param string $entity
      * @param array $dic
      * @param array $data
+     * @param array $dicionario
      * @return mixed
      */
-    private static function copyEntityData(array $dic, array $data)
+    private static function copyEntityData(string $entity, array $dic, array $data, array $dicionario)
     {
         if ($dic['unique']) {
             $data[$dic['column']] = rand(0, 999999) . "-" . $data[$dic['column']];
-            $read = new TableCrud(PRE . self::$entity);
+            $read = new TableCrud(PRE . $entity);
             $read->loadArray([$dic['column'] => $data[$dic['column']]]);
             if ($read->exist())
                 $data[$dic['column']] = rand(0, 999999) . "--" . $data[$dic['column']];
         }
 
         if ($dic['key'] === "link")
-            $data[$dic['column']] = Check::name($data[self::$dicionario[self::$info['title']]['column']]);
+            $data[$dic['column']] = Check::name($data[$dicionario[Metadados::getInfo($entity)['title']]['column']]);
 
         return $data[$dic['column']];
     }
 
     /**
+     * @param string $entity
      * @param array $dic
      * @param int $id
      * @return mixed
      */
-    private static function copyEntityMult(array $dic, int $id)
+    private static function copyEntityMult(string $entity, array $dic, int $id)
     {
         $datas = null;
         $read = new Read();
-        $read->exeRead(PRE . self::$entity . "_" . $dic['relation'], "WHERE " . self::$entity . "_id = :id", "id={$id}");
+        $read->exeRead(PRE . $entity . "_" . $dic['relation'], "WHERE " . $entity . "_id = :id", "id={$id}");
         if ($read->getResult()) {
             foreach ($read->getResult() as $item) {
                 if (!self::$error)
@@ -431,6 +385,7 @@ class Entity
     {
         $info = Metadados::getInfo($entity);
         $dicionario = Metadados::getDicionario($entity);
+
         $data = self::validateData($entity, $data, $info, $dicionario);
 
         if (!self::$error)
@@ -448,8 +403,7 @@ class Entity
      */
     private static function validateData(string $entity, array $data, array $info, array $dicionario)
     {
-
-        $dataR = [];
+        $dataR = !empty($data['id']) && $data['id'] > 0 ? ["id" => $data['id']] : [];
         foreach ($dicionario as $i => $dic) {
             if (in_array($dic['key'], ["extend", "list"]))
                 $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
@@ -476,9 +430,11 @@ class Entity
         foreach (["extend", "list"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
-                    $eInfo = Metadados::getInfo($dicionario[$i]['relation']);
-                    $eDic = Metadados::getDicionario($dicionario[$i]['relation']);
-                    $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], $eInfo, $eDic);
+                    if ($data[$dicionario[$i]['column']]) {
+                        $eInfo = Metadados::getInfo($dicionario[$i]['relation']);
+                        $eDic = Metadados::getDicionario($dicionario[$i]['relation']);
+                        $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], $eInfo, $eDic);
+                    }
                 }
             }
         }
@@ -597,22 +553,14 @@ class Entity
         $data[$dic['column']] = self::checkLink($data, $dic, $dicionario, $info);
         self::checkNullSet($entity, $dic, $data[$dic['column']]);
 
-        if (!self::$error) {
-            $data[$dic['column']] = self::checkDefaultSet($dic, $data[$dic['column']]);
+        $data[$dic['column']] = self::checkDefaultSet($dic, $data[$dic['column']]);
 
-            if (!self::$error)
-                self::checkType($entity, $dic, $data[$dic['column']]);
-            if (!self::$error)
-                self::checkSize($entity, $dic, $data[$dic['column']]);
-            if (!self::$error)
-                self::checkUnique($entity, $dic, $data[$dic['column']], $data['id'] ?? null);
-            if (!self::$error)
-                self::checkRegular($entity, $dic, $data[$dic['column']]);
-            if (!self::$error)
-                self::checkValidate($entity, $dic, $data[$dic['column']]);
-            if (!self::$error)
-                self::checkValues($entity, $dic, $data[$dic['column']]);
-        }
+        self::checkType($entity, $dic, $data[$dic['column']]);
+        self::checkSize($entity, $dic, $data[$dic['column']]);
+        self::checkUnique($entity, $dic, $data[$dic['column']], $data['id'] ?? null);
+        self::checkRegular($entity, $dic, $data[$dic['column']]);
+        self::checkValidate($entity, $dic, $data[$dic['column']]);
+        self::checkValues($entity, $dic, $data[$dic['column']]);
 
         return $data[$dic['column']];
     }
@@ -626,14 +574,18 @@ class Entity
      */
     private static function checkDataOne(string $entity, array $dic, $dados = null)
     {
+        if (is_numeric($dados))
+            $dados = Entity::read($dic['relation'], $dados);
+
         if ($dados && is_array($dados) && Check::isAssoc($dados)) {
             $data = Entity::validateData($dic['relation'], $dados, Metadados::getInfo($dic['relation']), Metadados::getDicionario($dic['relation']));
 
-            if ($data)
+            if (isset(self::$error[$dic['relation']])) {
+                self::$error[$entity][$dic['column']] = self::$error[$dic['relation']];
+                unset(self::$error[$dic['relation']]);
+            } else {
                 return $data;
-
-            self::$error[$entity][$dic['column']] = self::$error[$dic['relation']];
-            unset(self::$error[$dic['relation']]);
+            }
         }
 
         return null;
@@ -699,14 +651,18 @@ class Entity
     private static function checkDefaultSet(array $dic, $value = null)
     {
         if (!$value || empty($value)) {
-            if ($dic['default'] === "datetime")
-                return date("Y-m-d H:i:s");
-            elseif ($dic['default'] === "date")
-                return date("Y-m-d");
-            elseif ($dic['default'] === "time")
-                return date("H:i:s");
-            else
-                return $dic['default'];
+            if($dic['default'] === "") {
+                return null;
+            } else {
+                if ($dic['default'] === "datetime")
+                    return date("Y-m-d H:i:s");
+                elseif ($dic['default'] === "date")
+                    return date("Y-m-d");
+                elseif ($dic['default'] === "time")
+                    return date("H:i:s");
+                else
+                    return $dic['default'];
+            }
 
         } elseif ($dic['type'] === "json" && is_array($value)) {
             $d = [];
@@ -831,7 +787,7 @@ class Entity
             $read = new Read();
             $read->exeRead(PRE . $entity, "WHERE {$dic['column']} = '{$value}'" . ($id ? " && id != " . $id : ""));
             if ($read->getResult())
-                self::$error[$entity][$dic['column']] = "precisa ser único";
+                self::$error[$entity][$dic['column']] = "valor já existe, digite outro";
         }
     }
 
