@@ -449,16 +449,17 @@ class Entity
     private static function validateData(string $entity, array $data, array $info, array $dicionario)
     {
 
+        $dataR = [];
         foreach ($dicionario as $i => $dic) {
             if (in_array($dic['key'], ["extend", "list"]))
-                $data[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
+                $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
             elseif (in_array($dic['key'], ["extend_mult", "list_mult"]))
-                $data[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
+                $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
             else
-                $data[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
+                $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
         }
 
-        return self::$error ? null : $data;
+        return self::$error ? null : $dataR;
     }
 
     /**
