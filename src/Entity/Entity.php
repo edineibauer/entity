@@ -24,6 +24,14 @@ class Entity
     }
 
     /**
+     * @param mixed $error
+     */
+    public static function setError($error)
+    {
+        self::$error = $error;
+    }
+
+    /**
      * Le a data de uma entidade de forma extendida
      *
      * @param string $entity
@@ -184,6 +192,8 @@ class Entity
 
             elseif ($dic['key'] === "extend_mult")
                 $data[$dic['column']] = self::readEntityMult($dic, $data['id']);
+            elseif ($dic['type'] === 'json')
+                $data[$dic['column']] = !empty($data[$dic['column']]) ? json_decode($data[$dic['column']], true) : [];
         }
 
         return $data;
@@ -220,8 +230,8 @@ class Entity
      */
     private static function deleteLinkedContent(string $entity, array $data)
     {
-        $info = Metadados::getInfo($entity);
-        $dic = Metadados::getDicionario($entity);
+        $info = \EntityForm\Metadados::getInfo($entity);
+        $dic = \EntityForm\Metadados::getDicionario($entity);
         if ($info && isset($data['id'])) {
 
             /*   REMOVE EXTEND MULT  */
@@ -385,7 +395,6 @@ class Entity
     {
         $info = Metadados::getInfo($entity);
         $dicionario = Metadados::getDicionario($entity);
-        $id = null;
 
         $data = self::validateData($entity, $data, $info, $dicionario);
 
@@ -431,10 +440,12 @@ class Entity
         foreach (["extend", "list"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
-                    if ($data[$dicionario[$i]['column']]) {
+                    if (!empty($data[$dicionario[$i]['column']])) {
                         $eInfo = Metadados::getInfo($dicionario[$i]['relation']);
                         $eDic = Metadados::getDicionario($dicionario[$i]['relation']);
                         $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], $eInfo, $eDic);
+                    } else {
+                        $data[$dicionario[$i]['column']] = null;
                     }
                 }
             }
@@ -464,6 +475,29 @@ class Entity
 
         return $id;
     }
+
+    /**
+     * @param array $data
+     * @param array $info
+     * @param array $dicionario
+     * @return array
+     */
+    private static function splitRelation(array $data, array $info, array $dicionario): array
+    {
+        $relation = null;
+
+        foreach (["extend_mult", "list_mult"] as $e) {
+            if ($info[$e]) {
+                foreach ($info[$e] as $i) {
+                    $relation[$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
+                    unset($data[$dicionario[$i]['column']]);
+                }
+            }
+        }
+
+        return ["relation" => $relation, "data" => $data];
+    }
+
 
     /**
      * @param string $entity
@@ -675,13 +709,9 @@ class Entity
                 elseif (strlen($val[0]) > $size[0])
                     self::$error[$entity][$dic['column']] = "valor inteiro do valor decimal excedido. Max {$size[0]}";
 
-            } elseif (in_array($dic['type'], array("double", "real"))) {
-                if (!is_double($value))
-                    self::$error[$entity][$dic['column']] = "valor double não válido";
-
-            } elseif ($dic['type'] === "float") {
-                if (!is_float($value))
-                    self::$error[$entity][$dic['column']] = "valor flutuante não é válido";
+            } elseif (in_array($dic['type'], array("double", "real", "float"))) {
+                if (!is_numeric($value))
+                    self::$error[$entity][$dic['column']] = "valor não é um número";
 
             } elseif (in_array($dic['type'], array("bit", "boolean", "serial"))) {
                 if (!is_bool($value))
@@ -818,7 +848,14 @@ class Entity
      */
     private static function checkValues(string $entity, array $dic, $value)
     {
-        if (!empty($dic['allow']['values']) && !empty($value) && !in_array($value, $dic['allow']['values']))
-            self::$error[$entity][$dic['column']] = "valor não é permitido";
+        if($dic['type'] === "json" && !empty($value)) {
+            foreach (json_decode($value, true) as $item) {
+                if (!empty($dic['allow']['values']) && !empty($item) && !in_array($item, $dic['allow']['values']))
+                    self::$error[$entity][$dic['column']] = "valor não é permitido";
+            }
+        } else {
+            if (!empty($dic['allow']['values']) && !empty($value) && !in_array($value, $dic['allow']['values']))
+                self::$error[$entity][$dic['column']] = "valor não é permitido";
+        }
     }
 }
