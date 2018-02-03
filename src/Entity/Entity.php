@@ -45,8 +45,10 @@ class Entity
 
         if (!$data) {
             foreach ($dicionario as $dic) {
-                if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
+                if ($dic['key'] === "extend")
                     $result[$dic['column']] = self::read($dic['relation']);
+                elseif ($dic['key'] === "list")
+                    $result[$dic['column']] = null;
                 elseif ($dic['key'] === "extend_mult")
                     $result[$dic['column']] = self::readEntityMult($entity, $dic);
                 else
@@ -187,13 +189,18 @@ class Entity
     private static function readEntity(array $data, array $dicionario): array
     {
         foreach ($dicionario as $dic) {
-            if (in_array($dic['key'], ["extend", "list"]) && !self::$error)
-                $data[$dic['column']] = self::read($dic['relation'], (int)$data[$dic['column']]);
-
-            elseif ($dic['key'] === "extend_mult")
+            if ($dic['key'] === "extend" && !self::$error) {
+                $data[$dic['column']] = self::read($dic['relation'], $data[$dic['column']]);
+            } elseif ($dic['key'] === "list") {
+                if (!empty($data[$dic['column']]) && is_numeric($data[$dic['column']]) && !self::$error)
+                    $data[$dic['column']] = self::read($dic['relation'], $data[$dic['column']]);
+                else
+                    $data[$dic['column']] = null;
+            } elseif ($dic['key'] === "extend_mult") {
                 $data[$dic['column']] = self::readEntityMult($dic, $data['id']);
-            elseif ($dic['type'] === 'json')
+            } elseif ($dic['type'] === 'json') {
                 $data[$dic['column']] = !empty($data[$dic['column']]) ? json_decode($data[$dic['column']], true) : [];
+            }
         }
 
         return $data;
@@ -409,9 +416,9 @@ class Entity
      * @param array $data
      * @param array $info
      * @param array $dicionario
-     * @return mixed
+     * @return array
      */
-    private static function validateData(string $entity, array $data, array $info, array $dicionario)
+    private static function validateData(string $entity, array $data, array $info, array $dicionario) : array
     {
         $dataR = !empty($data['id']) && $data['id'] > 0 ? ["id" => $data['id']] : [];
         foreach ($dicionario as $i => $dic) {
@@ -423,7 +430,7 @@ class Entity
                 $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
         }
 
-        return self::$error ? null : $dataR;
+        return $dataR;
     }
 
     /**
@@ -586,10 +593,11 @@ class Entity
      */
     private static function checkDataOne(string $entity, array $dic, $dados = null)
     {
-        if (is_numeric($dados))
+        if (is_numeric($dados) && !self::$error)
             $dados = Entity::read($dic['relation'], $dados);
 
         if ($dados && is_array($dados) && Check::isAssoc($dados)) {
+
             $data = Entity::validateData($dic['relation'], $dados, Metadados::getInfo($dic['relation']), Metadados::getDicionario($dic['relation']));
 
             if (isset(self::$error[$dic['relation']])) {
@@ -598,6 +606,9 @@ class Entity
             } else {
                 return $data;
             }
+
+        } else if($dic['default'] === false && empty($dados)) {
+            self::$error[$entity][$dic['column']] = "informe um valor";
         }
 
         return null;
@@ -633,7 +644,7 @@ class Entity
     private static function checkNullSet(string $entity, array $dic, $value)
     {
         if ($dic['default'] === false && empty($value))
-            self::$error[$entity][$dic['column']] = "campo necessário";
+            self::$error[$entity][$dic['column']] = "informe um valor";
     }
 
     /**
@@ -663,7 +674,7 @@ class Entity
     private static function checkDefaultSet(array $dic, $value = null)
     {
         if (!$value || empty($value)) {
-            if($dic['default'] === "") {
+            if ($dic['default'] === "") {
                 return null;
             } else {
                 if ($dic['default'] === "datetime")
@@ -848,7 +859,7 @@ class Entity
      */
     private static function checkValues(string $entity, array $dic, $value)
     {
-        if($dic['type'] === "json" && !empty($value)) {
+        if ($dic['type'] === "json" && !empty($value)) {
             foreach (json_decode($value, true) as $item) {
                 if (!empty($dic['allow']['values']) && !empty($item) && !in_array($item, $dic['allow']['values']))
                     self::$error[$entity][$dic['column']] = "valor não é permitido";
