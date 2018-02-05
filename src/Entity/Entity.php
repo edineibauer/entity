@@ -8,6 +8,7 @@ use ConnCrud\TableCrud;
 use ConnCrud\Update;
 use EntityForm\Metadados;
 use Helpers\Check;
+use Helpers\Helper;
 
 class Entity
 {
@@ -418,7 +419,7 @@ class Entity
      * @param array $dicionario
      * @return array
      */
-    private static function validateData(string $entity, array $data, array $info, array $dicionario) : array
+    private static function validateData(string $entity, array $data, array $info, array $dicionario): array
     {
         $dataR = !empty($data['id']) && $data['id'] > 0 ? ["id" => $data['id']] : [];
         foreach ($dicionario as $i => $dic) {
@@ -607,7 +608,7 @@ class Entity
                 return $data;
             }
 
-        } else if($dic['default'] === false && empty($dados)) {
+        } else if ($dic['default'] === false && empty($dados)) {
             self::$error[$entity][$dic['column']] = "informe um valor";
         }
 
@@ -860,9 +861,19 @@ class Entity
     private static function checkValues(string $entity, array $dic, $value)
     {
         if ($dic['type'] === "json" && !empty($value)) {
-            foreach (json_decode($value, true) as $item) {
-                if (!empty($dic['allow']['values']) && !empty($item) && !in_array($item, $dic['allow']['values']))
-                    self::$error[$entity][$dic['column']] = "valor não é permitido";
+            if (in_array($dic['format'], ["sources", "source"])) {
+                if (!empty($dic['allow']['values']) && !empty($value)) {
+                    $value = json_decode($value, true);
+                    foreach ($value as $v) {
+                        if (!in_array(pathinfo($v['url'], PATHINFO_EXTENSION), $dic['allow']['values']))
+                            self::$error[$entity][$dic['column']] = "valor não é permitido";
+                    }
+                }
+            } else {
+                foreach (json_decode($value, true) as $item) {
+                    if (!empty($dic['allow']['values']) && !empty($item) && !in_array($item, $dic['allow']['values']))
+                        self::$error[$entity][$dic['column']] = "valor não é permitido";
+                }
             }
         } else {
             if (!empty($dic['allow']['values']) && !empty($value) && !in_array($value, $dic['allow']['values']))
