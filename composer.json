@@ -11,8 +11,7 @@
   ],
   "require": {
     "php": "^7.0",
-    "conn/conn-crud": "^1.1",
-    "conn/helpers": "^1"
+    "conn/entity-form": "^1"
   },
   "autoload": {
     "psr-0": {
