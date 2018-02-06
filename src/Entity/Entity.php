@@ -3,6 +3,7 @@
 namespace Entity;
 
 use ConnCrud\Create;
+use ConnCrud\Delete;
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
 use ConnCrud\Update;
@@ -50,7 +51,7 @@ class Entity
                     $result[$dic['column']] = self::read($dic['relation']);
                 elseif ($dic['key'] === "list")
                     $result[$dic['column']] = null;
-                elseif ($dic['key'] === "extend_mult")
+                elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult")
                     $result[$dic['column']] = self::readEntityMult($entity, $dic);
                 else
                     $result[$dic['column']] = self::checkDefaultSet($dic);
@@ -60,7 +61,7 @@ class Entity
             $copy = new TableCrud($entity);
             $copy->load($data);
             if ($copy->exist())
-                $result = self::readEntity($copy->getDados(), $dicionario);
+                $result = self::readEntity($entity, $copy->getDados(), $dicionario);
             else
                 self::$error[$entity]['id'] = "id: {$data} não encontrado para leitura";
 
@@ -69,7 +70,7 @@ class Entity
                 $copy = new TableCrud($entity);
                 $copy->loadArray($data);
                 if ($copy->exist())
-                    $result = self::readEntity($copy->getDados(), $dicionario);
+                    $result = self::readEntity($entity, $copy->getDados(), $dicionario);
                 else
                     self::$error[$entity]['id'] = "datas não encontrado em " . $entity . " para leitura";
 
@@ -183,11 +184,12 @@ class Entity
     }
 
     /**
+     * @param string $entity
      * @param array $data
      * @param array $dicionario
      * @return array
      */
-    private static function readEntity(array $data, array $dicionario): array
+    private static function readEntity(string $entity, array $data, array $dicionario): array
     {
         foreach ($dicionario as $dic) {
             if ($dic['key'] === "extend" && !self::$error) {
@@ -197,8 +199,8 @@ class Entity
                     $data[$dic['column']] = self::read($dic['relation'], $data[$dic['column']]);
                 else
                     $data[$dic['column']] = null;
-            } elseif ($dic['key'] === "extend_mult") {
-                $data[$dic['column']] = self::readEntityMult($dic, $data['id']);
+            } elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult") {
+                $data[$dic['column']] = self::readEntityMult($entity, $dic, $data['id']);
             } elseif ($dic['type'] === 'json') {
                 $data[$dic['column']] = !empty($data[$dic['column']]) ? json_decode($data[$dic['column']], true) : [];
             }
@@ -463,12 +465,9 @@ class Entity
         foreach (["extend_mult", "list_mult"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
-                    $lInfo = Metadados::getInfo($dicionario[$i]['relation']);
-                    $lDic = Metadados::getDicionario($dicionario[$i]['relation']);
+                    if (!empty($data[$dicionario[$i]['column']]) && is_array($data[$dicionario[$i]['column']]))
+                        $relation[$e][$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
 
-                    foreach ($data[$dicionario[$i]['column']] as $datum) {
-                        $relation[$dicionario[$i]['relation']][] = self::storeData($dicionario[$i]['relation'], $datum, $lInfo, $lDic);
-                    }
                     unset($data[$dicionario[$i]['column']]);
                 }
             }
@@ -516,12 +515,14 @@ class Entity
     {
         $read = new Read();
         $create = new Create();
-        foreach ($relation as $e => $list) {
-            if (is_array($list)) {
-                foreach ($list as $i) {
-                    $read->exeRead(PRE . $entity . "_" . $e, "WHERE {$entity}_id = :eid && {$e}_id = :iid", "eid={$id}&iid={$i}");
+        foreach ($relation as $data) {
+            foreach ($data as $entityRelation => $ids) {
+                $del = new Delete();
+                $del->exeDelete(PRE . $entity . "_" . $entityRelation, "WHERE {$entity}_id = :eid", "eid={$id}");
+                foreach ($ids as $idRelation) {
+                    $read->exeRead(PRE . $entity . "_" . $entityRelation, "WHERE {$entity}_id = :eid && {$entityRelation}_id = :iid", "eid={$id}&iid={$idRelation}");
                     if (!$read->getResult())
-                        $create->exeCreate(PRE . $entity . "_" . $e, [$entity . "_id" => $id, $e . "_id" => $i]);
+                        $create->exeCreate(PRE . $entity . "_" . $entityRelation, [$entity . "_id" => $id, $entityRelation . "_id" => $idRelation]);
                 }
             }
         }
@@ -572,7 +573,6 @@ class Entity
         $data[$dic['column']] = $data[$dic['column']] ?? null;
         $data[$dic['column']] = self::checkLink($data, $dic, $dicionario, $info);
         self::checkNullSet($entity, $dic, $data[$dic['column']]);
-
         $data[$dic['column']] = self::checkDefaultSet($dic, $data[$dic['column']]);
 
         self::checkType($entity, $dic, $data[$dic['column']]);
@@ -624,10 +624,17 @@ class Entity
      */
     private static function checkDataMult(string $entity, array $dic, $dados = null)
     {
+        if(is_string($dados))
+            $dados = json_decode($dados, true);
+
         if ($dados && is_array($dados)) {
             $results = null;
-            foreach ($dados as $dado)
-                $results[] = self::checkDataOne($entity, $dic, $dado);
+            foreach ($dados as $dado) {
+                if (is_array($dado))
+                    $results[] = self::checkDataOne($entity, $dic, $dado);
+                elseif(is_numeric($dado))
+                    return $dados;
+            }
 
             return $results;
         }
@@ -689,11 +696,7 @@ class Entity
             }
 
         } elseif ($dic['type'] === "json" && is_array($value)) {
-            $d = [];
-            foreach ($value as $i => $v)
-                $d[$i] = (int)$v;
-
-            $value = json_encode($d);
+            $value = json_encode($value);
         }
 
         return $value;
@@ -860,19 +863,18 @@ class Entity
      */
     private static function checkValues(string $entity, array $dic, $value)
     {
-        if ($dic['type'] === "json" && !empty($value)) {
-            if (in_array($dic['format'], ["sources", "source"])) {
-                if (!empty($dic['allow']['values']) && !empty($value)) {
-                    $value = json_decode($value, true);
-                    foreach ($value as $v) {
+        if ($dic['type'] === "json") {
+            if (!empty($value) && !empty($dic['allow']['values'])) {
+                if (in_array($dic['format'], ["sources", "source"])) {
+                    foreach (json_decode($value, true) as $v) {
                         if (!in_array(pathinfo($v['url'], PATHINFO_EXTENSION), $dic['allow']['values']))
                             self::$error[$entity][$dic['column']] = "valor não é permitido";
                     }
-                }
-            } else {
-                foreach (json_decode($value, true) as $item) {
-                    if (!empty($dic['allow']['values']) && !empty($item) && !in_array($item, $dic['allow']['values']))
-                        self::$error[$entity][$dic['column']] = "valor não é permitido";
+                } else {
+                    foreach (json_decode($value, true) as $item) {
+                        if (!empty($item) && !in_array($item, $dic['allow']['values']))
+                            self::$error[$entity][$dic['column']] = "valor não é permitido";
+                    }
                 }
             }
         } else {
