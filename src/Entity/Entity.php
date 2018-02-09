@@ -697,6 +697,9 @@ class Entity
 
         } elseif ($dic['type'] === "json" && is_array($value)) {
             $value = json_encode($value);
+
+        } elseif ($dic['format'] === "password") {
+            $value = Check::password($value);
         }
 
         return $value;
