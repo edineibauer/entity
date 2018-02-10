@@ -408,7 +408,10 @@ class Entity
 
         $data = self::validateData($entity, $data, $info, $dicionario);
 
-        if (!self::$error)
+        if(self::$error && !empty($data['id']) && $data['id'] > 0)
+            $data = self::removeWrongValueFromUpdate($data);
+
+        if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
             $id = self::storeData($entity, $data, $info, $dicionario);
 
         return self::$error ?? $id;
@@ -425,15 +428,34 @@ class Entity
     {
         $dataR = !empty($data['id']) && $data['id'] > 0 ? ["id" => $data['id']] : [];
         foreach ($dicionario as $i => $dic) {
-            if (in_array($dic['key'], ["extend", "list"]))
-                $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
-            elseif (in_array($dic['key'], ["extend_mult", "list_mult"]))
-                $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
-            else
-                $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
+            if (empty($data['id']) || ($data['id'] > 0 && isset($data[$dic['column']]))) {
+                $data[$dic['column']] = $data[$dic['column']] ?? null;
+
+                if (in_array($dic['key'], ["extend", "list"]))
+                    $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
+                elseif (in_array($dic['key'], ["extend_mult", "list_mult"]))
+                    $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
+                else
+                    $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
+            }
         }
 
         return $dataR;
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    private static function removeWrongValueFromUpdate(array $data) :array
+    {
+        foreach (self::$error as $entidade => $dados) {
+            foreach ($dados as $column => $mensagem) {
+                unset($data[$column]);
+            }
+        }
+
+        return $data;
     }
 
     /**
@@ -570,11 +592,9 @@ class Entity
      */
     private static function checkData(string $entity, array $data, array $dic, array $dicionario, array $info)
     {
-        $data[$dic['column']] = $data[$dic['column']] ?? null;
         $data[$dic['column']] = self::checkLink($data, $dic, $dicionario, $info);
-        self::checkNullSet($entity, $dic, $data[$dic['column']]);
         $data[$dic['column']] = self::checkDefaultSet($dic, $data[$dic['column']]);
-
+        self::checkNullSet($entity, $dic, $data[$dic['column']]);
         self::checkType($entity, $dic, $data[$dic['column']]);
         self::checkSize($entity, $dic, $data[$dic['column']]);
         self::checkUnique($entity, $dic, $data[$dic['column']], $data['id'] ?? null);
