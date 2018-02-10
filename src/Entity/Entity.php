@@ -428,7 +428,7 @@ class Entity
     {
         $dataR = !empty($data['id']) && $data['id'] > 0 ? ["id" => $data['id']] : [];
         foreach ($dicionario as $i => $dic) {
-            if (empty($data['id']) || ($data['id'] > 0 && isset($data[$dic['column']]))) {
+            if (empty($data['id']) || $dic['format'] === "link" || ($data['id'] > 0 && isset($data[$dic['column']]))) {
                 $data[$dic['column']] = $data[$dic['column']] ?? null;
 
                 if (in_array($dic['key'], ["extend", "list"]))
