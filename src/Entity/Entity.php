@@ -688,6 +688,8 @@ class Entity
     {
         if ($dic['key'] === "link" && $info['title'] !== null && !empty($dados[$dicionario[$info['title']]['column']]))
             return Check::name($dados[$dicionario[$info['title']]['column']]);
+        elseif($dic['key'] === "link")
+            return Check::name($dados[$dic['column']]);
 
         return $dados[$dic['column']];
     }
