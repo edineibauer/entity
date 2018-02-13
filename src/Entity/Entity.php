@@ -38,9 +38,10 @@ class Entity
      *
      * @param string $entity
      * @param mixed $data
+     * @param bool $recursive
      * @return mixed
      */
-    public static function read(string $entity, $data = null)
+    public static function read(string $entity, $data = null, bool $recursive = true)
     {
         $dicionario = Metadados::getDicionario($entity);
         $result = null;
@@ -58,10 +59,10 @@ class Entity
             }
 
         } elseif (is_numeric($data)) {
-            $copy = new TableCrud($entity);
-            $copy->load($data);
-            if ($copy->exist())
-                $result = self::readEntity($entity, $copy->getDados(), $dicionario);
+            $read = new TableCrud($entity);
+            $read->load($data);
+            if ($read->exist())
+                $result = self::readEntity($entity, $read->getDados(), $dicionario, $recursive);
             else
                 self::$error[$entity]['id'] = "id: {$data} não encontrado para leitura";
 
@@ -70,7 +71,7 @@ class Entity
                 $copy = new TableCrud($entity);
                 $copy->loadArray($data);
                 if ($copy->exist())
-                    $result = self::readEntity($entity, $copy->getDados(), $dicionario);
+                    $result = self::readEntity($entity, $copy->getDados(), $dicionario, $recursive);
                 else
                     self::$error[$entity]['id'] = "datas não encontrado em " . $entity . " para leitura";
 
@@ -187,13 +188,15 @@ class Entity
      * @param string $entity
      * @param array $data
      * @param array $dicionario
+     * @param bool $recursive
      * @return array
      */
-    private static function readEntity(string $entity, array $data, array $dicionario): array
+    private static function readEntity(string $entity, array $data, array $dicionario, bool $recursive = true): array
     {
         foreach ($dicionario as $dic) {
             if ($dic['key'] === "extend" && !self::$error) {
-                $data[$dic['column']] = self::read($dic['relation'], $data[$dic['column']]);
+                if ($recursive)
+                    $data[$dic['column']] = self::read($dic['relation'], $data[$dic['column']]);
             } elseif ($dic['key'] === "list") {
                 if (!empty($data[$dic['column']]) && is_numeric($data[$dic['column']]) && !self::$error)
                     $data[$dic['column']] = self::read($dic['relation'], $data[$dic['column']]);
@@ -408,7 +411,7 @@ class Entity
 
         $data = self::validateData($entity, $data, $info, $dicionario);
 
-        if(self::$error && !empty($data['id']) && $data['id'] > 0)
+        if (self::$error && !empty($data['id']) && $data['id'] > 0)
             $data = self::removeWrongValueFromUpdate($data);
 
         if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
@@ -447,7 +450,7 @@ class Entity
      * @param array $data
      * @return array
      */
-    private static function removeWrongValueFromUpdate(array $data) :array
+    private static function removeWrongValueFromUpdate(array $data): array
     {
         foreach (self::$error as $entidade => $dados) {
             foreach ($dados as $column => $mensagem) {
@@ -615,7 +618,7 @@ class Entity
     private static function checkDataOne(string $entity, array $dic, $dados = null)
     {
         if (is_numeric($dados) && !self::$error)
-            $dados = Entity::read($dic['relation'], $dados);
+            $dados = Entity::read($dic['relation'], $dados, false);
 
         if ($dados && is_array($dados) && Check::isAssoc($dados)) {
 
@@ -644,7 +647,7 @@ class Entity
      */
     private static function checkDataMult(string $entity, array $dic, $dados = null)
     {
-        if(is_string($dados))
+        if (is_string($dados))
             $dados = json_decode($dados, true);
 
         if ($dados && is_array($dados)) {
@@ -652,7 +655,7 @@ class Entity
             foreach ($dados as $dado) {
                 if (is_array($dado))
                     $results[] = self::checkDataOne($entity, $dic, $dado);
-                elseif(is_numeric($dado))
+                elseif (is_numeric($dado))
                     return $dados;
             }
 
@@ -688,7 +691,7 @@ class Entity
     {
         if ($dic['key'] === "link" && $info['title'] !== null && !empty($dados[$dicionario[$info['title']]['column']]))
             return Check::name($dados[$dicionario[$info['title']]['column']]);
-        elseif($dic['key'] === "link")
+        elseif ($dic['key'] === "link")
             return Check::name($dados[$dic['column']]);
 
         return $dados[$dic['column']];
