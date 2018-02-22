@@ -23,6 +23,14 @@ abstract class EntityDelete
     }
 
     /**
+     * @param mixed $error
+     */
+    public static function setError($error)
+    {
+        self::$error = $error;
+    }
+
+    /**
      * Deleta informações de uma entidade
      *
      * @param string $entity
