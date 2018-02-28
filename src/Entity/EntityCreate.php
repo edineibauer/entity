@@ -72,9 +72,9 @@ abstract class EntityCreate extends EntityRead
             if (empty($data['id']) || $dic['format'] === "link" || ($data['id'] > 0 && isset($data[$dic['column']]))) {
                 $data[$dic['column']] = $data[$dic['column']] ?? null;
 
-                if (in_array($dic['key'], ["extend", "list"]))
+                if (in_array($dic['key'], ["extend", "list", "selecao"]))
                     $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
-                elseif (in_array($dic['key'], ["extend_mult", "list_mult"]))
+                elseif (in_array($dic['key'], ["extend_mult", "list_mult", "selecao_mult"]))
                     $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
                 else
                     $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
@@ -110,7 +110,7 @@ abstract class EntityCreate extends EntityRead
      */
     private static function storeData(string $entity, array $data, array $info, array $dicionario)
     {
-        foreach (["extend", "list"] as $e) {
+        foreach (["extend", "list", "selecao"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
                     if (!empty($data[$dicionario[$i]['column']])) {
@@ -125,7 +125,7 @@ abstract class EntityCreate extends EntityRead
         }
 
         $relation = null;
-        foreach (["extend_mult", "list_mult"] as $e) {
+        foreach (["extend_mult", "list_mult", "selecao_mult"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
                     if (!empty($data[$dicionario[$i]['column']]) && is_array($data[$dicionario[$i]['column']]))
@@ -138,10 +138,12 @@ abstract class EntityCreate extends EntityRead
 
         $id = (!empty($data['id']) ? self::updateTableData($entity, $data) : self::createTableData($entity, $data));
 
-        if (!$id)
+        if (!$id) {
             self::$error[$entity]['id'] = "Erro ao Salvar no Banco";
-        elseif ($relation)
+        } elseif ($relation){
             self::createRelationalData($entity, $id, $relation);
+            Elastic::add($entity, $id);
+        }
 
         return $id;
     }
@@ -397,7 +399,7 @@ abstract class EntityCreate extends EntityRead
             elseif ($dic['type'] === "mediumint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 24) - 1)))
                 self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
-            elseif ($dic['type'] === "int" && !in_array($dic['key'], ["extend", "list", "list_mult", "extend_mult"]) && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)))
+            elseif ($dic['type'] === "int" && !in_array($dic['key'], ["extend", "list", "list_mult", "selecao", "selecao_mult", "extend_mult"]) && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 32) - 1)))
                 self::$error[$entity][$dic['column']] = "numero excedeu seu limite. Max " . (pow(2, ($dic['size'] * 2)) - 1);
 
             elseif ($dic['type'] === "bigint" && ($value > (pow(2, ($dic['size'] * 2)) - 1) || $value > (pow(2, 64) - 1)))

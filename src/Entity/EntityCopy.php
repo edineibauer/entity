@@ -63,13 +63,13 @@ abstract class EntityCopy extends EntityDelete
             if ($dic['key'] === "extend" && !self::$error)
                 $data[$dic['column']] = self::exeCopy($dic['relation'], (int)$data[$dic['column']]);
 
-            elseif ($dic['key'] === "list")
+            elseif ($dic['key'] === "list" || $dic['key'] === "selecao")
                 $data[$dic['column']] = self::copyList($dic['relation'], (int)$data[$dic['column']]);
 
             elseif ($dic['key'] === "extend_mult")
                 $data[$dic['column']] = self::copyEntityMult($entity, $dic, $data['id']);
 
-            elseif ($dic['key'] === "list_mult")
+            elseif ($dic['key'] === "list_mult" || $dic['key'] === "selecao_mult")
                 $data[$dic['column']] = self::copyListMult($entity, $dic, $data['id']);
 
             else

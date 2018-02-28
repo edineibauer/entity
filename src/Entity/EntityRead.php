@@ -28,9 +28,9 @@ abstract class EntityRead extends EntityCopy
             foreach ($dicionario as $dic) {
                 if ($dic['key'] === "extend")
                     $result[$dic['column']] = self::exeRead($dic['relation']);
-                elseif ($dic['key'] === "list")
+                elseif ($dic['key'] === "list" || $dic['key'] === "selecao")
                     $result[$dic['column']] = null;
-                elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult")
+                elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult" || $dic['key'] === "selecao_mult")
                     $result[$dic['column']] = self::readEntityMult($entity, $dic);
                 else
                     $result[$dic['column']] = self::checkDefaultSet($dic);
@@ -110,12 +110,12 @@ abstract class EntityRead extends EntityCopy
             if ($dic['key'] === "extend" && !self::$error) {
                 if ($recursive)
                     $data[$dic['column']] = self::exeRead($dic['relation'], $data[$dic['column']]);
-            } elseif ($dic['key'] === "list") {
+            } elseif ($dic['key'] === "list" || $dic['key'] === "selecao") {
                 if (!empty($data[$dic['column']]) && is_numeric($data[$dic['column']]) && !self::$error)
                     $data[$dic['column']] = self::exeRead($dic['relation'], $data[$dic['column']]);
                 else
                     $data[$dic['column']] = null;
-            } elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult") {
+            } elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult" || $dic['key'] === "selecao_mult") {
                 $data[$dic['column']] = self::readEntityMult($entity, $dic, $data['id']);
             } elseif ($dic['type'] === 'json') {
                 $data[$dic['column']] = !empty($data[$dic['column']]) ? json_decode($data[$dic['column']], true) : [];
