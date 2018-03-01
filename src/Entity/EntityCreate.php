@@ -142,7 +142,7 @@ abstract class EntityCreate extends EntityRead
             self::$error[$entity]['id'] = "Erro ao Salvar no Banco";
         } elseif ($relation){
             self::createRelationalData($entity, $id, $relation);
-            Elastic::add($entity, $id);
+//            Elastic::add($entity, $id);
         }
 
         return $id;
