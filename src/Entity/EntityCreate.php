@@ -128,8 +128,11 @@ abstract class EntityCreate extends EntityRead
         foreach (["extend_mult", "list_mult", "selecao_mult"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
-                    if (!empty($data[$dicionario[$i]['column']]) && is_array($data[$dicionario[$i]['column']]))
-                        $relation[$e][$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
+                    if (!empty($data[$dicionario[$i]['column']]) && is_array($data[$dicionario[$i]['column']])) {
+                        $relation[$e]['relation'] = $dicionario[$i]['relation'];
+                        $relation[$e]['data'] = $data[$dicionario[$i]['column']];
+                        $relation[$e]['column'] = $dicionario[$i]['column'];
+                    }
 
                     unset($data[$dicionario[$i]['column']]);
                 }
@@ -189,14 +192,13 @@ abstract class EntityCreate extends EntityRead
         $read = new Read();
         $create = new Create();
         foreach ($relation as $data) {
-            foreach ($data as $entityRelation => $ids) {
-                $del = new Delete();
-                $del->exeDelete(PRE . $entity . "_" . $entityRelation, "WHERE {$entity}_id = :eid", "eid={$id}");
-                foreach ($ids as $idRelation) {
-                    $read->exeRead(PRE . $entity . "_" . $entityRelation, "WHERE {$entity}_id = :eid && {$entityRelation}_id = :iid", "eid={$id}&iid={$idRelation}");
-                    if (!$read->getResult())
-                        $create->exeCreate(PRE . $entity . "_" . $entityRelation, [$entity . "_id" => $id, $entityRelation . "_id" => $idRelation]);
-                }
+            $entityRelation = PRE . $entity . "_" . $data['relation'] . "_" . $data['column'];
+            $del = new Delete();
+            $del->exeDelete($entityRelation, "WHERE {$entity}_id = :eid", "eid={$id}");
+            foreach ($data['data'] as $idRelation) {
+                $read->exeRead($entityRelation, "WHERE {$entity}_id = :eid && {$data['relation']}_id = :iid", "eid={$id}&iid={$idRelation}");
+                if (!$read->getResult())
+                    $create->exeCreate($entityRelation, [$entity . "_id" => $id, $data['relation'] . "_id" => $idRelation]);
             }
         }
     }

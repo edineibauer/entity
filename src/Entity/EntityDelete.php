@@ -80,7 +80,7 @@ abstract class EntityDelete
             if ($info['extend_mult']) {
                 foreach ($info['extend_mult'] as $item) {
                     $read = new Read();
-                    $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'], "WHERE {$entity}_id = :id", "id={$data['id']}");
+                    $read->exeRead(PRE . $entity . "_" . $dic[$item]['relation'] . "_" . $dic[$item]['column'], "WHERE {$entity}_id = :id", "id={$data['id']}");
                     if ($read->getResult()) {
                         foreach ($read->getResult() as $i)
                             self::deleteExtend($dic[$item]['relation'], $i[$dic[$item]['relation'] . "_id"]);

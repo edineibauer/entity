@@ -136,7 +136,7 @@ abstract class EntityRead extends EntityCopy
         $datas = null;
         if ($id) {
             $read = new Read();
-            $read->exeRead(PRE . $entity . "_" . $dic['relation'], "WHERE " . $entity . "_id = :id", "id={$id}");
+            $read->exeRead(PRE . $entity . "_" . $dic['relation'] . "_" . $dic['column'], "WHERE " . $entity . "_id = :id", "id={$id}");
             if ($read->getResult()) {
                 foreach ($read->getResult() as $item) {
                     if (!self::$error)

@@ -90,7 +90,7 @@ abstract class EntityCopy extends EntityDelete
     {
         $datas = null;
         $read = new Read();
-        $read->exeRead(PRE . $entity . "_" . $dic['relation'], "WHERE " . $entity . "_id = :id", "id={$id}");
+        $read->exeRead(PRE . $entity . "_" . $dic['relation'] . "_" . $dic['column'], "WHERE " . $entity . "_id = :id", "id={$id}");
         if ($read->getResult()) {
             foreach ($read->getResult() as $item) {
                 $datas[] = self::copyList($dic['relation'], (int)$item[$dic['relation'] . "_id"]);
@@ -148,7 +148,7 @@ abstract class EntityCopy extends EntityDelete
     {
         $datas = null;
         $read = new Read();
-        $read->exeRead(PRE . $entity . "_" . $dic['relation'], "WHERE " . $entity . "_id = :id", "id={$id}");
+        $read->exeRead(PRE . $entity . "_" . $dic['relation'] . "_" . $dic['column'], "WHERE " . $entity . "_id = :id", "id={$id}");
         if ($read->getResult()) {
             foreach ($read->getResult() as $item) {
                 if (!self::$error)
