@@ -125,16 +125,18 @@ abstract class EntityCreate extends EntityRead
         }
 
         $relation = null;
+        $indice = 0;
         foreach (["extend_mult", "list_mult", "selecao_mult"] as $e) {
             if ($info[$e]) {
-                foreach ($info[$e] as $i) {
-                    if (!empty($data[$dicionario[$i]['column']]) && is_array($data[$dicionario[$i]['column']])) {
-                        $relation[$e]['relation'] = $dicionario[$i]['relation'];
-                        $relation[$e]['data'] = $data[$dicionario[$i]['column']];
-                        $relation[$e]['column'] = $dicionario[$i]['column'];
+                foreach ($info[$e] as $idColumn) {
+                    if (!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']])) {
+                        $relation[$indice]['relation'] = $dicionario[$idColumn]['relation'];
+                        $relation[$indice]['data'] = $data[$dicionario[$idColumn]['column']];
+                        $relation[$indice]['column'] = $dicionario[$idColumn]['column'];
                     }
 
-                    unset($data[$dicionario[$i]['column']]);
+                    unset($data[$dicionario[$idColumn]['column']]);
+                    $indice++;
                 }
             }
         }
@@ -143,9 +145,9 @@ abstract class EntityCreate extends EntityRead
 
         if (!$id) {
             self::$error[$entity]['id'] = "Erro ao Salvar no Banco";
-        } elseif ($relation){
+        } elseif ($relation) {
             self::createRelationalData($entity, $id, $relation);
-//            Elastic::add($entity, $id);
+            //            Elastic::add($entity, $id);
         }
 
         return $id;
@@ -202,6 +204,7 @@ abstract class EntityCreate extends EntityRead
             }
         }
     }
+
     /**
      * @param string $entity
      * @param array $data
@@ -283,6 +286,7 @@ abstract class EntityCreate extends EntityRead
 
         return $data[$dic['column']];
     }
+
     /**
      * Verifica se o valor submetido é inválido ao desejado
      *
