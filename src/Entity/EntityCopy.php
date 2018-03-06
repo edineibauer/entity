@@ -110,7 +110,7 @@ abstract class EntityCopy extends EntityDelete
         $copy = new TableCrud($entity);
         $copy->load($id);
         if ($copy->exist())
-            return $copy->getDados();
+            return $copy->getDados()['id'];
 
         return null;
     }

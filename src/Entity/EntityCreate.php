@@ -113,13 +113,12 @@ abstract class EntityCreate extends EntityRead
         foreach (["extend", "list", "selecao"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $i) {
-                    if (!empty($data[$dicionario[$i]['column']])) {
-                        $eInfo = Metadados::getInfo($dicionario[$i]['relation']);
-                        $eDic = Metadados::getDicionario($dicionario[$i]['relation']);
-                        $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], $eInfo, $eDic);
-                    } else {
+                    if (!empty($data[$dicionario[$i]['column']]) && is_array($data[$dicionario[$i]['column']]) && Check::isAssoc($data[$dicionario[$i]['column']]))
+                        $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], Metadados::getInfo($dicionario[$i]['relation']), Metadados::getDicionario($dicionario[$i]['relation']));
+                    elseif (!empty($data[$dicionario[$i]['column']]) && is_numeric($data[$dicionario[$i]['column']]))
+                        $data[$dicionario[$i]['column']] = (int)$data[$dicionario[$i]['column']];
+                    else
                         $data[$dicionario[$i]['column']] = null;
-                    }
                 }
             }
         }
@@ -129,10 +128,17 @@ abstract class EntityCreate extends EntityRead
         foreach (["extend_mult", "list_mult", "selecao_mult"] as $e) {
             if ($info[$e]) {
                 foreach ($info[$e] as $idColumn) {
-                    if (!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']])) {
-                        $relation[$indice]['relation'] = $dicionario[$idColumn]['relation'];
+
+                    $relation[$indice]['data'] = null;
+                    $relation[$indice]['relation'] = $dicionario[$idColumn]['relation'];
+                    $relation[$indice]['column'] = $dicionario[$idColumn]['column'];
+
+                    if (!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']]) && !is_numeric($data[$dicionario[$idColumn]['column']][0])){
+                        foreach ($data[$dicionario[$idColumn]['column']] as $dataRelation)
+                            $relation[$indice]['data'][] = self::storeData($dicionario[$idColumn]['relation'], $dataRelation, Metadados::getInfo($dicionario[$idColumn]['relation']), Metadados::getDicionario($dicionario[$idColumn]['relation']));
+
+                    } elseif(!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']])) {
                         $relation[$indice]['data'] = $data[$dicionario[$idColumn]['column']];
-                        $relation[$indice]['column'] = $dicionario[$idColumn]['column'];
                     }
 
                     unset($data[$dicionario[$idColumn]['column']]);
@@ -162,25 +168,28 @@ abstract class EntityCreate extends EntityRead
      */
     private static function checkDataOne(string $entity, array $dic, $dados = null)
     {
-        if (is_numeric($dados) && !self::$error)
-            $dados = Entity::read($dic['relation'], $dados, false);
+        if ($dic['default'] === false && empty($dados)) {
+            self::$error[$entity][$dic['column']] = "informe um valor";
+            return null;
 
-        if ($dados && is_array($dados) && Check::isAssoc($dados)) {
+        } elseif ($dic['key'] === "extend" || is_array($dados)) {
+            if (is_numeric($dados) || (is_array($dados) && !empty($dados[0]) && is_numeric($dados[0]))) {
+                self::$error[$entity][$dic['column']] = "esperado um objeto, recebido um ID ou Array de ID";
+                return null;
+            }
 
             $data = Entity::validateData($dic['relation'], $dados, Metadados::getInfo($dic['relation']), Metadados::getDicionario($dic['relation']));
 
             if (isset(self::$error[$dic['relation']])) {
                 self::$error[$entity][$dic['column']] = self::$error[$dic['relation']];
                 unset(self::$error[$dic['relation']]);
-            } else {
-                return $data;
+                return null;
             }
 
-        } else if ($dic['default'] === false && empty($dados)) {
-            self::$error[$entity][$dic['column']] = "informe um valor";
+            return $data;
         }
 
-        return null;
+        return $dados;
     }
 
 
@@ -197,10 +206,12 @@ abstract class EntityCreate extends EntityRead
             $entityRelation = PRE . $entity . "_" . $data['relation'] . "_" . $data['column'];
             $del = new Delete();
             $del->exeDelete($entityRelation, "WHERE {$entity}_id = :eid", "eid={$id}");
-            foreach ($data['data'] as $idRelation) {
-                $read->exeRead($entityRelation, "WHERE {$entity}_id = :eid && {$data['relation']}_id = :iid", "eid={$id}&iid={$idRelation}");
-                if (!$read->getResult())
-                    $create->exeCreate($entityRelation, [$entity . "_id" => $id, $data['relation'] . "_id" => $idRelation]);
+            if (!empty($data['data'])) {
+                foreach ($data['data'] as $idRelation) {
+                    $read->exeRead($entityRelation, "WHERE {$entity}_id = :eid && {$data['relation']}_id = :iid", "eid={$id}&iid={$idRelation}");
+                    if (!$read->getResult())
+                        $create->exeCreate($entityRelation, [$entity . "_id" => $id, $data['relation'] . "_id" => $idRelation]);
+                }
             }
         }
     }
