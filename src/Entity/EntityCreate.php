@@ -174,10 +174,8 @@ abstract class EntityCreate extends EntityRead
     private static function checkSelecaoUnique(array $dataR, array $dic, array $dados) :array
     {
         if(!empty($dic['select'])) {
-            foreach ($dic['select'] as $select) {
-                if(is_numeric($dados[$select]) && $dados[$select] > 0)
-                    $dataR[$select] = (int)$dados[$select];
-            }
+            foreach ($dic['select'] as $select)
+                $dataR[$select] = (is_numeric($dados[$select]) && $dados[$select] > 0 ? (int)$dados[$select] : null);
         }
 
         return $dataR;
