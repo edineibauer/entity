@@ -72,6 +72,9 @@ abstract class EntityCreate extends EntityRead
             if (empty($data['id']) || $dic['format'] === "link" || ($data['id'] > 0 && isset($data[$dic['column']]))) {
                 $data[$dic['column']] = $data[$dic['column']] ?? null;
 
+                if(in_array($dic['key'], ["extend_mult", "list", "selecao", "list_mult", "selecao_mult"]))
+                    $dataR = self::checkSelecaoUnique($dataR, $dic, $data);
+
                 if (in_array($dic['key'], ["extend", "list", "selecao"]))
                     $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
                 elseif (in_array($dic['key'], ["extend_mult", "list_mult", "selecao_mult"]))
@@ -157,6 +160,27 @@ abstract class EntityCreate extends EntityRead
         }
 
         return $id;
+    }
+
+    /**
+     * Valida informações submetidas por um campo multiplo selecionado de um campo relacional
+     * ex: selecione uma pessoa, agora selecione um dos endereços dessa pessoa, este endereço selecionado é validado.
+     *
+     * @param array $dataR
+     * @param array $dic
+     * @param array $dados
+     * @return array
+     */
+    private static function checkSelecaoUnique(array $dataR, array $dic, array $dados) :array
+    {
+        if(!empty($dic['select'])) {
+            foreach ($dic['select'] as $select) {
+                if(is_numeric($dados[$select]) && $dados[$select] > 0)
+                    $dataR[$select] = (int)$dados[$select];
+            }
+        }
+
+        return $dataR;
     }
 
     /**
