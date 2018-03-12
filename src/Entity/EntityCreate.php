@@ -175,7 +175,7 @@ abstract class EntityCreate extends EntityRead
     {
         if(!empty($dic['select'])) {
             foreach ($dic['select'] as $select)
-                $dataR[$select] = (is_numeric($dados[$select]) && $dados[$select] > 0 ? (int)$dados[$select] : null);
+                $dataR[$select] = (is_numeric($dados[$select . "__" . $dic['column']]) && $dados[$select . "__" . $dic['column']] > 0 ? (int)$dados[$select . "__" . $dic['column']] : null);
         }
 
         return $dataR;
