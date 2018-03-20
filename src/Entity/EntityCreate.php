@@ -79,6 +79,11 @@ abstract class EntityCreate extends EntityRead
                     $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
                 elseif (in_array($dic['key'], ["extend_mult", "list_mult", "selecao_mult"]))
                     $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
+                elseif($dic['key'] === "publisher")
+                    if(empty($_SESSION['userlogin']))
+                        self::$error[$entity]['id'] = "precisa estar logado para editar";
+                    else
+                        $dataR[$dic['column']] = $_SESSION['userlogin']['id'];
                 else
                     $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
             }
