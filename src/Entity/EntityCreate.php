@@ -69,23 +69,27 @@ abstract class EntityCreate extends EntityRead
     {
         $dataR = !empty($data['id']) && $data['id'] > 0 ? ["id" => $data['id']] : [];
         foreach ($dicionario as $i => $dic) {
-            if (empty($data['id']) || $dic['format'] === "link" || ($data['id'] > 0 && isset($data[$dic['column']]))) {
+            if (empty($data['id']) || $dic['format'] === "link" || $dic['format'] === "publisher" || ($data['id'] > 0 && isset($data[$dic['column']]))) {
                 $data[$dic['column']] = $data[$dic['column']] ?? null;
 
-                if(in_array($dic['key'], ["extend_mult", "list", "selecao", "list_mult", "selecao_mult"]))
+                if (in_array($dic['key'], ["extend_mult", "list", "selecao", "list_mult", "selecao_mult"]))
                     $dataR = self::checkSelecaoUnique($dataR, $dic, $data);
 
-                if (in_array($dic['key'], ["extend", "list", "selecao"]))
+                if (in_array($dic['key'], ["extend", "list", "selecao"])) {
                     $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
-                elseif (in_array($dic['key'], ["extend_mult", "list_mult", "selecao_mult"]))
+
+                } elseif (in_array($dic['key'], ["extend_mult", "list_mult", "selecao_mult"])) {
                     $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
-                elseif($dic['key'] === "publisher")
-                    if(empty($_SESSION['userlogin']))
+
+                } elseif ($dic['key'] === "publisher") {
+                    if (empty($_SESSION['userlogin']))
                         self::$error[$entity]['id'] = "precisa estar logado para editar";
                     else
                         $dataR[$dic['column']] = $_SESSION['userlogin']['id'];
-                else
+
+                } else {
                     $dataR[$dic['column']] = self::checkData($entity, $data, $dic, $dicionario, $info);
+                }
             }
         }
 
@@ -141,11 +145,11 @@ abstract class EntityCreate extends EntityRead
                     $relation[$indice]['relation'] = $dicionario[$idColumn]['relation'];
                     $relation[$indice]['column'] = $dicionario[$idColumn]['column'];
 
-                    if (!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']]) && !is_numeric($data[$dicionario[$idColumn]['column']][0])){
+                    if (!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']]) && !is_numeric($data[$dicionario[$idColumn]['column']][0])) {
                         foreach ($data[$dicionario[$idColumn]['column']] as $dataRelation)
                             $relation[$indice]['data'][] = self::storeData($dicionario[$idColumn]['relation'], $dataRelation, Metadados::getInfo($dicionario[$idColumn]['relation']), Metadados::getDicionario($dicionario[$idColumn]['relation']));
 
-                    } elseif(!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']])) {
+                    } elseif (!empty($data[$dicionario[$idColumn]['column']]) && is_array($data[$dicionario[$idColumn]['column']])) {
                         $relation[$indice]['data'] = $data[$dicionario[$idColumn]['column']];
                     }
 
@@ -176,9 +180,9 @@ abstract class EntityCreate extends EntityRead
      * @param array $dados
      * @return array
      */
-    private static function checkSelecaoUnique(array $dataR, array $dic, array $dados) :array
+    private static function checkSelecaoUnique(array $dataR, array $dic, array $dados): array
     {
-        if(!empty($dic['select'])) {
+        if (!empty($dic['select'])) {
             foreach ($dic['select'] as $select)
                 $dataR[$select . "__" . $dic['column']] = (is_numeric($dados[$select . "__" . $dic['column']]) && $dados[$select . "__" . $dic['column']] > 0 ? (int)$dados[$select . "__" . $dic['column']] : null);
         }
