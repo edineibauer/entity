@@ -2,6 +2,9 @@
 
 namespace Entity;
 
+use ConnCrud\Read;
+use EntityForm\Metadados;
+
 class Entity extends EntityCreate
 {
     /**
@@ -36,10 +39,11 @@ class Entity extends EntityCreate
      *
      * @param string $entity
      * @param mixed $data
+     * @param bool $checkPermission
      */
-    public static function delete(string $entity, $data)
+    public static function delete(string $entity, $data, bool $checkPermission = false)
     {
-        self::exeDelete($entity, $data);
+        self::exeDelete($entity, $data, $checkPermission);
     }
 
     /**
@@ -47,11 +51,53 @@ class Entity extends EntityCreate
      *
      * @param string $entity
      * @param mixed $data
+     * @param bool $checkPermission
      * @return mixed
      */
-    public static function copy(string $entity, $data)
+    public static function copy(string $entity, $data, bool $checkPermission = false)
     {
-        return self::exeCopy($entity, $data);
+        return self::exeCopy($entity, $data, $checkPermission);
+    }
+
+    /**
+     * @param string $entity
+     * @param int $id
+     * @param bool $check
+     * @return bool
+    */
+    public static function checkPermission(string $entity, int $id, bool $check = false)
+    {
+        if(!$check)
+            return true;
+
+        $info = Metadados::getInfo($entity);
+
+        if($entity !== "login" && empty($info['publisher']))
+            return true;
+
+        if(empty($_SESSION['userlogin']))
+            return false;
+
+        $read = new Read();
+        $read->exeRead(PRE . $entity, "WHERE id = :id", "id={$id}");
+        if($read->getResult()) {
+            $dados = $read->getResult()[0];
+
+            if ($entity !== "login") {
+                $metadados = Metadados::getDicionario($entity);
+                if ($_SESSION['userlogin']['id'] == $dados[$metadados[$info['publisher']]['column']])
+                    return true;
+
+            } else {
+                if ($_SESSION['userlogin']['setor'] < $dados['setor'])
+                    return true;
+
+                if ($_SESSION['userlogin']['setor'] == $dados['setor'] && $_SESSION['userlogin']['nivel'] < $dados['nivel'])
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -35,15 +35,20 @@ abstract class EntityDelete
      *
      * @param string $entity
      * @param mixed $data
+     * @param bool $checkPermission
      */
-    protected static function exeDelete(string $entity, $data)
+    protected static function exeDelete(string $entity, $data, bool $checkPermission)
     {
         if (is_int($data)) {
             $del = new TableCrud($entity);
             $del->load($data);
             if ($del->exist()) {
-                self::deleteLinkedContent($entity, $del->getDados());
-                $del->delete();
+                if(Entity::checkPermission($entity, $data, $checkPermission)) {
+                    self::deleteLinkedContent($entity, $del->getDados());
+                    $del->delete();
+                } else {
+                    self::$error[$entity]['id'] = "permissão negada";
+                }
             } else {
                 self::$error[$entity]['id'] = "id não encontrado para deletar";
             }
@@ -52,14 +57,18 @@ abstract class EntityDelete
                 $del = new TableCrud($entity);
                 $del->loadArray($data);
                 if ($del->exist()) {
-                    self::deleteLinkedContent($entity, $del->getDados());
-                    $del->delete();
+                    if(Entity::checkPermission($entity, $data['id'], $checkPermission)) {
+                        self::deleteLinkedContent($entity, $del->getDados());
+                        $del->delete();
+                    } else {
+                        self::$error[$entity]['id'] = "permissão negada";
+                    }
                 } else {
                     self::$error[$entity]['id'] = "data não encontrada para deletar";
                 }
             } else {
                 foreach ($data as $datum)
-                    self::exeDelete($entity, $datum);
+                    self::exeDelete($entity, $datum, $checkPermission);
             }
         }
     }

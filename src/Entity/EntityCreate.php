@@ -56,8 +56,12 @@ abstract class EntityCreate extends EntityRead
             if (self::$error && !empty($data['id']) && $data['id'] > 0)
                 $data = self::removeWrongValueFromUpdate($data);
 
-            if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
-                $id = self::storeData($entity, $data, $info, $dicionario);
+            if($entity === "login" && ($_SESSION['userlogin']['setor'] > $data['setor'] || ($_SESSION['userlogin']['setor'] == $data['setor'] && $_SESSION['userlogin']['nivel'] > $data['nivel']))) {
+                self::$error[$entity]['id'] = "Você não pode Criar um Usuário Superior";
+            } else {
+                if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
+                    $id = self::storeData($entity, $data, $info, $dicionario);
+            }
 
             return self::$error ?? $id;
         }

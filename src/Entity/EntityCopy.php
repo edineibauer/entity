@@ -15,9 +15,10 @@ abstract class EntityCopy extends EntityDelete
      *
      * @param string $entity
      * @param mixed $data
+     * @param bool $checkPermission
      * @return mixed
      */
-    protected static function exeCopy(string $entity, $data)
+    protected static function exeCopy(string $entity, $data, $checkPermission)
     {
         $result = null;
         $dicionario = Metadados::getDicionario($entity);
@@ -26,7 +27,11 @@ abstract class EntityCopy extends EntityDelete
             $copy = new TableCrud($entity);
             $copy->load($data);
             if ($copy->exist())
-                $result = self::copyEntity($entity, $copy->getDados(), $dicionario);
+                if (Entity::checkPermission($entity, $data, $checkPermission)) {
+                    $result = self::copyEntity($entity, $copy->getDados(), $dicionario);
+                } else {
+                    self::$error[$entity]['id'] = "permissão negada";
+                }
             else
                 self::$error[$entity]['id'] = "id: {$data} não encontrado para cópia";
 
@@ -35,7 +40,11 @@ abstract class EntityCopy extends EntityDelete
                 $copy = new TableCrud($entity);
                 $copy->loadArray($data);
                 if ($copy->exist())
-                    $result = self::copyEntity($entity, $copy->getDados(), $dicionario);
+                    if (Entity::checkPermission($entity, $data['id'], $checkPermission)) {
+                        $result = self::copyEntity($entity, $copy->getDados(), $dicionario);
+                    } else {
+                        self::$error[$entity]['id'] = "permissão negada";
+                    }
                 else
                     self::$error[$entity]['id'] = "datas não encontrado em " . $entity . " para cópia";
 
