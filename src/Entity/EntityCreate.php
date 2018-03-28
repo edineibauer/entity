@@ -18,30 +18,33 @@ abstract class EntityCreate extends EntityRead
      *
      * @param string $entity
      * @param array $data
+     * @param bool $save
+     * @param mixed $callback
      * @return mixed
      */
-    protected static function exeCreate(string $entity, array $data)
+    protected static function exeCreate(string $entity, array $data, bool $save = true)
     {
         self::$error = null;
 
         if (!Check::isAssoc($data)) {
             $result = [];
             foreach ($data as $datum)
-                $result[] = self::addData($entity, $datum);
+                $result[] = self::addData($entity, $datum, $save);
 
             return $result;
         } else {
 
-            return self::addData($entity, $data);
+            return self::addData($entity, $data, $save);
         }
     }
 
     /**
      * @param string $entity
      * @param array $data
+     * @param bool $save
      * @return mixed
      */
-    private static function addData(string $entity, array $data)
+    private static function addData(string $entity, array $data, bool $save)
     {
         $id = null;
         $info = Metadados::getInfo($entity);
@@ -49,13 +52,17 @@ abstract class EntityCreate extends EntityRead
 
         $data = self::validateData($entity, $data, $info, $dicionario);
 
-        if (self::$error && !empty($data['id']) && $data['id'] > 0)
-            $data = self::removeWrongValueFromUpdate($data);
+        if($save) {
+            if (self::$error && !empty($data['id']) && $data['id'] > 0)
+                $data = self::removeWrongValueFromUpdate($data);
 
-        if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
-            $id = self::storeData($entity, $data, $info, $dicionario);
+            if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
+                $id = self::storeData($entity, $data, $info, $dicionario);
 
-        return self::$error ?? $id;
+            return self::$error ?? $id;
+        }
+
+        return self::$error;
     }
 
     /**

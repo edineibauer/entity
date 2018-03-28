@@ -22,11 +22,13 @@ class Entity extends EntityCreate
      *
      * @param string $entity
      * @param array $data
+     * @param bool $save
+     * @param mixed $callback
      * @return mixed
      */
-    public static function add(string $entity, array $data)
+    public static function add(string $entity, array $data, bool $save = true)
     {
-        return self::exeCreate($entity, $data);
+        return self::exeCreate($entity, $data, $save);
     }
 
     /**
@@ -59,18 +61,18 @@ class Entity extends EntityCreate
      * @return array
     private static function splitRelation(array $data, array $info, array $dicionario): array
     {
-        $relation = null;
+    $relation = null;
 
-        foreach (["extend_mult", "list_mult"] as $e) {
-            if ($info[$e]) {
-                foreach ($info[$e] as $i) {
-                    $relation[$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
-                    unset($data[$dicionario[$i]['column']]);
-                }
-            }
-        }
+    foreach (["extend_mult", "list_mult"] as $e) {
+    if ($info[$e]) {
+    foreach ($info[$e] as $i) {
+    $relation[$dicionario[$i]['relation']] = $data[$dicionario[$i]['column']];
+    unset($data[$dicionario[$i]['column']]);
+    }
+    }
+    }
 
-        return ["relation" => $relation, "data" => $data];
+    return ["relation" => $relation, "data" => $data];
     }
      */
 
