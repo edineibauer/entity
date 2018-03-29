@@ -22,7 +22,7 @@ abstract class EntityCreate extends EntityRead
      * @param mixed $callback
      * @return mixed
      */
-    protected static function exeCreate(string $entity, array $data, bool $save = true)
+    protected static function exeCreate(string $entity, array $data, bool $save)
     {
         self::$error = null;
 
@@ -52,16 +52,14 @@ abstract class EntityCreate extends EntityRead
 
         $data = self::validateData($entity, $data, $info, $dicionario);
 
-        if($save) {
+        if ($save) {
             if (self::$error && !empty($data['id']) && $data['id'] > 0)
-                $data = self::removeWrongValueFromUpdate($data);
+                $data = self::removeWrongValueFromUpdate($data, $entity);
 
-            if($entity === "login" && ($_SESSION['userlogin']['setor'] > $data['setor'] || ($_SESSION['userlogin']['setor'] == $data['setor'] && $_SESSION['userlogin']['nivel'] > $data['nivel']))) {
-                self::$error[$entity]['id'] = "Você não pode Criar um Usuário Superior";
-            } else {
-                if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
-                    $id = self::storeData($entity, $data, $info, $dicionario);
-            }
+            $data = self::checkNivelUser($data, $entity);
+
+            if (!self::$error || (!empty($data['id']) && $data['id'] > 0))
+                $id = self::storeData($entity, $data, $info, $dicionario);
 
             return self::$error ?? $id;
         }
@@ -108,6 +106,7 @@ abstract class EntityCreate extends EntityRead
     }
 
     /**
+     * Remove valores com erros para salvar os corretos
      * @param array $data
      * @return array
      */
@@ -116,6 +115,29 @@ abstract class EntityCreate extends EntityRead
         foreach (self::$error as $entidade => $dados) {
             foreach ($dados as $column => $mensagem) {
                 unset($data[$column]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Impede criação ou alterações de perfis para um nível superior
+     * @param array $data
+     * @param string $entity
+     * @return array
+     */
+    private static function checkNivelUser(array $data, string $entity)
+    {
+        //Previne edições de setor e niveis maiores que o seu, além da edição de seu próprio setor
+        if ($entity === "login") {
+            if (!empty($data['id']) && $data['id'] == $_SESSION['userlogin']['id']) {
+                unset($data['setor'], $data['nivel'], $data['status']);
+            } else {
+                if ($data['setor'] < $_SESSION['userlogin']['setor'])
+                    $data['setor'] = $_SESSION['userlogin']['setor'];
+                if ($data['setor'] == $_SESSION['userlogin']['setor'] && $data['nivel'] < $_SESSION['userlogin']['nivel'])
+                    $data['nivel'] = $_SESSION['userlogin']['nivel'];
             }
         }
 
