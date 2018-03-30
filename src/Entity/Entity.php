@@ -67,7 +67,7 @@ class Entity extends EntityCreate
      */
     public static function checkPermission(string $entity, $id = null, bool $check = true)
     {
-        $login = $_SESSION['userlogin'];
+        $login = $_SESSION['userlogin'] ?? null;
 
         if (empty($login)) {
             //Anônimo
