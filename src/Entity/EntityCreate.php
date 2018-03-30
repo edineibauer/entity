@@ -145,7 +145,9 @@ abstract class EntityCreate extends EntityRead
      */
     private static function checkNivelUser(array $data, string $entity)
     {
-        //Previne edições de setor e niveis maiores que o seu, além da edição de seu próprio setor
+        if(empty($_SESSION['userlogin']))
+            return $data;
+
         if ($entity === "login") {
             if (!empty($data['id']) && $data['id'] == $_SESSION['userlogin']['id']) {
                 unset($data['setor'], $data['nivel'], $data['status']);
@@ -253,7 +255,7 @@ abstract class EntityCreate extends EntityRead
             self::$error[$entity][$dic['column']] = "informe um valor";
             return null;
 
-        } elseif ($dic['key'] === "extend" || is_array($dados)) {
+        } elseif (($dic['key'] === "extend" && !empty($dados)) || is_array($dados)) {
             if (is_numeric($dados) || (is_array($dados) && !empty($dados[0]) && is_numeric($dados[0]))) {
                 self::$error[$entity][$dic['column']] = "esperado um objeto, recebido um ID ou Array de ID";
                 return null;
