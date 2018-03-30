@@ -54,7 +54,7 @@ abstract class EntityCreate extends EntityRead
 
         if ($save) {
             if (self::$error && !empty($data['id']) && $data['id'] > 0)
-                $data = self::removeWrongValueFromUpdate($data, $entity);
+                $data = self::removeWrongValueFromUpdate($data, $entity, $dicionario);
 
             $data = self::checkNivelUser($data, $entity);
 
@@ -85,10 +85,10 @@ abstract class EntityCreate extends EntityRead
                     $dataR = self::checkSelecaoUnique($dataR, $dic, $data);
 
                 if (in_array($dic['key'], ["extend", "list", "selecao"])) {
-                    $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']]);
+                    $dataR[$dic['column']] = self::checkDataOne($entity, $dic, $data[$dic['column']], $data['id']);
 
                 } elseif (in_array($dic['key'], ["extend_mult", "list_mult", "selecao_mult"])) {
-                    $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']]);
+                    $dataR[$dic['column']] = self::checkDataMult($entity, $dic, $data[$dic['column']], $data['id']);
 
                 } elseif ($dic['key'] === "publisher") {
                     if (empty($_SESSION['userlogin']))
@@ -108,13 +108,29 @@ abstract class EntityCreate extends EntityRead
     /**
      * Remove valores com erros para salvar os corretos
      * @param array $data
+     * @param string $entity
+     * @param array $dic
      * @return array
      */
-    private static function removeWrongValueFromUpdate(array $data): array
+    private static function removeWrongValueFromUpdate(array $data, string $entity, array $dic): array
     {
         foreach (self::$error as $entidade => $dados) {
             foreach ($dados as $column => $mensagem) {
                 unset($data[$column]);
+            }
+        }
+
+        foreach ($dic as $i => $dataColumn) {
+            if($dataColumn['key'] = "extend") {
+                $read = new Read();
+                $read->exeRead(PRE . $entity, "WHERE id = :id", "id={$data['id']}");
+                $value = $read->getResult() ? $read->getResult()[0][$dataColumn['column']] : null;
+                if(empty($value))
+                    continue;
+                elseif(empty($data[$dataColumn['column']]))
+                    unset($data[$dataColumn['column']]);
+            } elseif (!in_array($dataColumn['key'], ["selecao", "list", "publisher", "extend_mult", "selecao_mult", "list_mult"]) && !$dataColumn['update']) {
+                unset($data[$dataColumn['column']]);
             }
         }
 
@@ -162,7 +178,7 @@ abstract class EntityCreate extends EntityRead
                         $data[$dicionario[$i]['column']] = self::storeData($dicionario[$i]['relation'], $data[$dicionario[$i]['column']], Metadados::getInfo($dicionario[$i]['relation']), Metadados::getDicionario($dicionario[$i]['relation']));
                     elseif (!empty($data[$dicionario[$i]['column']]) && is_numeric($data[$dicionario[$i]['column']]))
                         $data[$dicionario[$i]['column']] = (int)$data[$dicionario[$i]['column']];
-                    else
+                    elseif ($e !== "extend")
                         $data[$dicionario[$i]['column']] = null;
                 }
             }
@@ -228,9 +244,10 @@ abstract class EntityCreate extends EntityRead
      * @param string $entity
      * @param array $dic
      * @param mixed $dados
+     * @param mixed $id
      * @return mixed
      */
-    private static function checkDataOne(string $entity, array $dic, $dados = null)
+    private static function checkDataOne(string $entity, array $dic, $dados = null, $id = null)
     {
         if ($dic['default'] === false && empty($dados)) {
             self::$error[$entity][$dic['column']] = "informe um valor";
@@ -240,6 +257,13 @@ abstract class EntityCreate extends EntityRead
             if (is_numeric($dados) || (is_array($dados) && !empty($dados[0]) && is_numeric($dados[0]))) {
                 self::$error[$entity][$dic['column']] = "esperado um objeto, recebido um ID ou Array de ID";
                 return null;
+            }
+
+            if(!empty($id) && empty($dados['id'])) {
+                $read = new Read();
+                $read->exeRead(PRE . $entity, "WHERE id = :idd", "idd={$id}");
+                if ($read->getResult() && !empty($read->getResult()[0][$dic['column']]))
+                    $dados['id'] = $read->getResult()[0][$dic['column']];
             }
 
             $data = Entity::validateData($dic['relation'], $dados, Metadados::getInfo($dic['relation']), Metadados::getDicionario($dic['relation']));
@@ -290,7 +314,7 @@ abstract class EntityCreate extends EntityRead
         unset($data['id']);
         $create = new Create();
         $create->exeCreate(PRE . $entity, $data);
-        return $create->getResult();
+        return $create->getResult() ? (int) $create->getResult() : null;
     }
 
     /**
@@ -306,7 +330,7 @@ abstract class EntityCreate extends EntityRead
             $up = new Update();
             $up->exeUpdate(PRE . $entity, $data, "WHERE id=:id", "id={$data['id']}");
             if ($up->getResult())
-                return $data['id'];
+                return (int) $data['id'];
         }
 
         return self::createTableData($entity, $data);
@@ -317,9 +341,10 @@ abstract class EntityCreate extends EntityRead
      * @param string $entity
      * @param array $dic
      * @param mixed $dados
+     * @param mixed $id
      * @return mixed
      */
-    private static function checkDataMult(string $entity, array $dic, $dados = null)
+    private static function checkDataMult(string $entity, array $dic, $dados = null, $id = null)
     {
         if (is_string($dados))
             $dados = json_decode($dados, true);
@@ -328,7 +353,7 @@ abstract class EntityCreate extends EntityRead
             $results = null;
             foreach ($dados as $dado) {
                 if (is_array($dado))
-                    $results[] = self::checkDataOne($entity, $dic, $dado);
+                    $results[] = self::checkDataOne($entity, $dic, $dado, $id);
                 elseif (is_numeric($dado))
                     return $dados;
             }
