@@ -3,6 +3,8 @@
   "description": "Entidades de um sistema",
   "type": "library",
   "license": "MIT",
+  "prefer-stable" : true,
+  "minimum-stability": "dev",
   "authors": [
     {
       "name": "Edinei J. Bauer",
