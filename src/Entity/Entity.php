@@ -88,13 +88,13 @@ class Entity extends EntityCreate
             $info = Metadados::getInfo($entity);
 
             //permite caso a verificação esteja desativada ou se for criação ou se a entidade não possui publisher
-            if (!$check || !$id || ($entity !== "login" && empty($info['publisher'])))
+            if (!$check || !$id || ($entity !== "usuarios" && empty($info['publisher'])))
                 return true;
 
             $read = new Read();
             $read->exeRead(PRE . $entity, "WHERE id = :id", "id={$id}");
             if ($read->getResult()) {
-                if ($entity !== "login") {
+                if ($entity !== "usuarios") {
 
                     $dados = $read->getResult()[0];
                     $metadados = Metadados::getDicionario($entity);
@@ -102,7 +102,7 @@ class Entity extends EntityCreate
                     if ($login['id'] == $dados[$metadados[$info['publisher']]['column']])
                         return true;
 
-                    $read->exeRead(PRE . "login", "WHERE id = :idl", "idl={$dados[$metadados[$info['publisher']]['column']]}");
+                    $read->exeRead("usuarios", "WHERE id = :idl", "idl={$dados[$metadados[$info['publisher']]['column']]}");
                     if ($read->getResult())
                         $publisher = $read->getResult()[0];
                 } else {
