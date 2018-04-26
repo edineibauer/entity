@@ -11,7 +11,7 @@
   ],
   "require": {
     "php": "^7.0",
-    "conn/entity-form": "^1"
+    "conn/entity-form": "dev-master"
   },
   "autoload": {
     "psr-0": {
