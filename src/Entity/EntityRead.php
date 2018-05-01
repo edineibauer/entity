@@ -5,8 +5,10 @@ namespace Entity;
 
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
+use EntityForm\Dicionario;
 use EntityForm\Metadados;
 use Helpers\Check;
+use Helpers\Helper;
 
 abstract class EntityRead extends EntityCopy
 {
@@ -16,52 +18,35 @@ abstract class EntityRead extends EntityCopy
      *
      * @param string $entity
      * @param mixed $data
-     * @param bool $recursive
      * @return mixed
      */
-    protected static function exeRead(string $entity, $data = null, bool $recursive = true)
+    protected static function exeRead(string $entity, $data = null)
     {
-        $dicionario = Metadados::getDicionario($entity);
-        $result = null;
+        if(!is_array($data) && !is_numeric($data))
+            return null;
 
-        if (!$data) {
-            foreach ($dicionario as $dic) {
-                if ($dic['key'] === "extend")
-                    $result[$dic['column']] = self::exeRead($dic['relation']);
-                elseif ($dic['key'] === "list" || $dic['key'] === "selecao")
-                    $result[$dic['column']] = null;
-                elseif ($dic['key'] === "extend_mult" || $dic['key'] === "list_mult" || $dic['key'] === "selecao_mult")
-                    $result[$dic['column']] = self::readEntityMult($entity, $dic);
-                else
-                    $result[$dic['column']] = self::checkDefaultSet($dic);
-            }
-
-        } elseif (is_numeric($data)) {
+        if(is_array($data)) {
             $read = new TableCrud($entity);
-            $read->load($data);
+            $read->loadArray($data);
             if ($read->exist())
-                $result = self::readEntity($entity, $read->getDados(), $dicionario, $recursive);
-            else
-                self::$error[$entity]['id'] = "id: {$data} não encontrado para leitura";
+                $data = (int)$read->getDados()['id'];
 
-        } elseif (is_array($data)) {
-            if (Check::isAssoc($data)) {
-                $copy = new TableCrud($entity);
-                $copy->loadArray($data);
-                if ($copy->exist())
-                    $result = self::readEntity($entity, $copy->getDados(), $dicionario, $recursive);
-                else
-                    self::$error[$entity]['id'] = "datas não encontrado em " . $entity . " para leitura";
-
-            } else {
-                foreach ($data as $datum) {
-                    if (!self::$error)
-                        $result[] = self::exeRead($entity, (int)$datum);
-                }
-            }
+            if(empty($data) || !is_numeric($data))
+                return null;
         }
 
-        return self::$error ? null : $result;
+        return self::readValues($entity, $data);
+    }
+
+    /**
+     * @param string $entity
+     * @param int $id
+     */
+    private static function readValues(string $entity, int $id)
+    {
+        $d = new Dicionario($entity);
+        $d->setData($id);
+        return $d->getDataFullRead();
     }
 
     /**
