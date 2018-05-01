@@ -22,16 +22,16 @@ abstract class EntityRead extends EntityCopy
      */
     protected static function exeRead(string $entity, $data = null)
     {
-        if(!is_array($data) && !is_numeric($data))
+        if (!is_array($data) && !is_numeric($data))
             return null;
 
-        if(is_array($data)) {
+        if (is_array($data)) {
             $read = new TableCrud($entity);
             $read->loadArray($data);
             if ($read->exist())
                 $data = (int)$read->getDados()['id'];
 
-            if(empty($data) || !is_numeric($data))
+            if (empty($data) || !is_numeric($data))
                 return null;
         }
 
@@ -41,6 +41,7 @@ abstract class EntityRead extends EntityCopy
     /**
      * @param string $entity
      * @param int $id
+     * @return mixed
      */
     private static function readValues(string $entity, int $id)
     {

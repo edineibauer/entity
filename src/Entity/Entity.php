@@ -15,9 +15,9 @@ class Entity extends EntityCreate
      * @param bool $recursive
      * @return mixed
      */
-    public static function read(string $entity, $data = null, bool $recursive = true)
+    public static function read(string $entity, $data = null)
     {
-        return self::exeRead($entity, $data, $recursive);
+        return self::exeRead($entity, $data);
     }
 
     /**
