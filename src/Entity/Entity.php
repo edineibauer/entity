@@ -3,6 +3,7 @@
 namespace Entity;
 
 use ConnCrud\Read;
+use EntityForm\Dicionario;
 use EntityForm\Metadados;
 
 class Entity extends EntityCreate
@@ -85,10 +86,27 @@ class Entity extends EntityCreate
             if (!empty($notAllowCreateLogged[$login['setor']]) && in_array($entity, $notAllowCreateLogged[$login['setor']]))
                 return false;
 
-            $info = Metadados::getInfo($entity);
+            $dicionario = new Dicionario($entity);
+            $read = new Read();
+
+            //check associação simples if have entity usuários ou if have publisher
+            $read->exeRead($entity, "WHERE id = :id", "id={$id}");
+            if ($read->getResult()) {
+                $tableData = $read->getResult()[0];
+                foreach ($dicionario->getAssociationSimple() as $meta) {
+                    if ($meta->getRelation() === "usuarios" || $meta->getKey() === "publisher") {
+                        $idData = $tableData[$meta->getColumn()];
+                        if (!empty($idData) && $idData != $login['id']) {
+                            $read->exeRead("usuarios", "WHERE id = :id", "id={$idData}");
+                            if ($read->getResult() && $login['setor'] >= $read->getResult()[0]['setor'])
+                                return false;
+                        }
+                    }
+                }
+            }
 
             //permite caso a verificação esteja desativada ou se for criação ou se a entidade não possui publisher
-            if (!$check || !$id || ($entity !== "usuarios" && empty($info['publisher'])))
+            if (!$check || !$id || ($entity !== "usuarios" && empty($dicionario->getInfo()['publisher'])))
                 return true;
 
             $read = new Read();
@@ -99,10 +117,10 @@ class Entity extends EntityCreate
                     $dados = $read->getResult()[0];
                     $metadados = Metadados::getDicionario($entity);
 
-                    if ($login['id'] == $dados[$metadados[$info['publisher']]['column']])
+                    if ($login['id'] == $dados[$metadados[$dicionario->getInfo()['publisher']]['column']])
                         return true;
 
-                    $read->exeRead("usuarios", "WHERE id = :idl", "idl={$dados[$metadados[$info['publisher']]['column']]}");
+                    $read->exeRead("usuarios", "WHERE id = :idl", "idl={$dados[$metadados[$dicionario->getInfo()['publisher']]['column']]}");
                     if ($read->getResult())
                         $publisher = $read->getResult()[0];
                 } else {
