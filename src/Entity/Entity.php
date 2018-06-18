@@ -69,21 +69,17 @@ class Entity extends EntityCreate
     public static function checkPermission(string $entity, $id = null, bool $check = true)
     {
         $login = $_SESSION['userlogin'] ?? null;
+        $allowCreate = file_exists(PATH_HOME . "_config/entity_not_show.json") ? json_decode(file_get_contents(PATH_HOME . "_config/entity_not_show.json"), true) : null;
 
         if (empty($login)) {
             //Anônimo
-
-            $allowCreateAnonimo = file_exists(PATH_HOME . "_config/create_entity_allow_anonimos.json") ? json_decode(file_get_contents(PATH_HOME . "_config/create_entity_allow_anonimos.json"), true) : null;
-
             //Nega Alterações para todas as Entidades e Permite criações somente na lista de permissão.
-            return (!$id && !empty($allowCreateAnonimo) && in_array($entity, $allowCreateAnonimo));
+            return (!$id && !empty($allowCreate) && in_array($entity, $allowCreate));
 
         } else {
             //Logado
-
             //Bloqueia Alterações ou Criação em entidades selecionadas para o setor do usuário
-            $notAllowCreateLogged = file_exists(PATH_HOME . "_config/create_entity_not_allow_logged.json") ? json_decode(file_get_contents(PATH_HOME . "_config/create_entity_not_allow_logged.json"), true) : null;
-            if (!empty($notAllowCreateLogged[$login['setor']]) && in_array($entity, $notAllowCreateLogged[$login['setor']]))
+            if (!empty($allowCreate[$login['setor']]) && in_array($entity, $allowCreate[$login['setor']]))
                 return false;
 
             $dicionario = new Dicionario($entity);
