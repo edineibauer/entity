@@ -93,9 +93,32 @@ class Entity extends EntityCreate
                     if ($meta->getRelation() === "usuarios" || $meta->getKey() === "publisher") {
                         $idData = $tableData[$meta->getColumn()];
                         if (!empty($idData) && $idData != $login['id']) {
-                            $read->exeRead("usuarios", "WHERE id = :id", "id={$idData}");
-                            if ($read->getResult() && $login['setor'] >= $read->getResult()[0]['setor'])
-                                return false;
+
+                            $continua = true;
+                            $general = json_decode(file_get_contents(PATH_HOME . "entity/general/general_info.json"), true);
+                            if(!empty($general[$entity]['owner']) || !empty($general[$entity]['ownerPublisher'])) {
+                                foreach (array_merge($general[$entity]['owner'] ?? [], $general[$entity]['ownerPublisher'] ?? []) as $item) {
+                                    $entityRelation = $item[0];
+                                    $column = $item[1];
+                                    $userColumn = $item[2];
+                                    $tableRelational = PRE . $entityRelation . "_" . $entity . "_" . $column;
+
+                                    $read = new Read();
+                                    $read->exeRead($entityRelation, "WHERE {$userColumn} = :user", "user={$_SESSION['userlogin']['id']}");
+                                    if($read->getResult()) {
+                                        $idUser = $read->getResult()[0]['id'];
+                                        $read->exeRead($tableRelational, "WHERE {$entityRelation}_id = :id", "id={$idUser}");
+                                        if ($read->getResult())
+                                            $continua = false;
+                                    }
+                                }
+                            }
+
+                            if($continua) {
+                                $read->exeRead("usuarios", "WHERE id = :id", "id={$idData}");
+                                if ($read->getResult() && $login['setor'] >= $read->getResult()[0]['setor'])
+                                    return false;
+                            }
                         }
                     }
                 }
