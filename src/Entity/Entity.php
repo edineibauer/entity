@@ -66,15 +66,14 @@ class Entity extends EntityCreate
      * @param bool $check
      * @return bool
      */
-    public static function checkPermission(string $entity, $id = null, bool $check = true)
+    public static function checkPermission(string $entity, $id = null, bool $check = true): bool
     {
         $login = $_SESSION['userlogin'] ?? null;
         $allowCreate = file_exists(PATH_HOME . "_config/entity_not_show.json") ? json_decode(file_get_contents(PATH_HOME . "_config/entity_not_show.json"), true) : null;
 
-        if (empty($login)) {
+        if (!$login) {
             //Anônimo
-            //Nega Alterações para todas as Entidades e Permite criações somente na lista de permissão.
-            return (!$id && !empty($allowCreate) && in_array($entity, $allowCreate));
+            return (!$id && !in_array($entity, $allowCreate[0]));
 
         } else {
             //Logado
@@ -96,7 +95,7 @@ class Entity extends EntityCreate
 
                             $continua = true;
                             $general = json_decode(file_get_contents(PATH_HOME . "entity/general/general_info.json"), true);
-                            if(!empty($general[$entity]['owner']) || !empty($general[$entity]['ownerPublisher'])) {
+                            if (!empty($general[$entity]['owner']) || !empty($general[$entity]['ownerPublisher'])) {
                                 foreach (array_merge($general[$entity]['owner'] ?? [], $general[$entity]['ownerPublisher'] ?? []) as $item) {
                                     $entityRelation = $item[0];
                                     $column = $item[1];
@@ -105,7 +104,7 @@ class Entity extends EntityCreate
 
                                     $read = new Read();
                                     $read->exeRead($entityRelation, "WHERE {$userColumn} = :user", "user={$_SESSION['userlogin']['id']}");
-                                    if($read->getResult()) {
+                                    if ($read->getResult()) {
                                         $idUser = $read->getResult()[0]['id'];
                                         $read->exeRead($tableRelational, "WHERE {$entityRelation}_id = :id", "id={$idUser}");
                                         if ($read->getResult())
@@ -114,7 +113,7 @@ class Entity extends EntityCreate
                                 }
                             }
 
-                            if($continua) {
+                            if ($continua) {
                                 $read->exeRead("usuarios", "WHERE id = :id", "id={$idData}");
                                 if ($read->getResult() && $login['setor'] >= $read->getResult()[0]['setor'])
                                     return false;
@@ -128,31 +127,23 @@ class Entity extends EntityCreate
             if (!$check || !$id || ($entity !== "usuarios" && empty($dicionario->getInfo()['publisher'])))
                 return true;
 
-            $read = new Read();
-            $read->exeRead(PRE . $entity, "WHERE id = :id", "id={$id}");
-            if ($read->getResult()) {
+            if (isset($tableData)) {
                 if ($entity !== "usuarios") {
 
-                    $dados = $read->getResult()[0];
                     $metadados = Metadados::getDicionario($entity);
 
-                    if ($login['id'] == $dados[$metadados[$dicionario->getInfo()['publisher']]['column']])
+                    if ($login['id'] == $tableData[$metadados[$dicionario->getInfo()['publisher']]['column']])
                         return true;
 
-                    $read->exeRead("usuarios", "WHERE id = :idl", "idl={$dados[$metadados[$dicionario->getInfo()['publisher']]['column']]}");
-                    if ($read->getResult())
-                        $publisher = $read->getResult()[0];
-                } else {
-                    $publisher = $read->getResult()[0];
+                    $read->exeRead("usuarios", "WHERE id = :idl", "idl={$tableData[$metadados[$dicionario->getInfo()['publisher']]['column']]}");
+                    if ($read->getResult() && (($login['setor'] == $read->getResult()[0]['setor'] && $login['nivel'] < $read->getResult()[0]['nivel']) || $login['id'] === $read->getResult()[0]['id']))
+                        return true;
+                    else
+                        return false;
                 }
 
-                if (isset($publisher)) {
-                    if ($login['setor'] < $publisher['setor'] || $login['id'] === $publisher['id'])
-                        return true;
-
-                    if ($login['setor'] == $publisher['setor'] && $login['nivel'] < $publisher['nivel'])
-                        return true;
-                }
+                if (($login['setor'] == $tableData['setor'] && $login['nivel'] < $tableData['nivel']) || $login['id'] === $tableData['id'])
+                    return true;
             }
 
             return false;
