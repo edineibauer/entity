@@ -78,7 +78,7 @@ class Entity extends EntityCreate
         } else {
             //Logado
             //Bloqueia Alterações ou Criação em entidades selecionadas para o setor do usuário
-            if (!empty($allowCreate[$login['setor']]) && in_array($entity, $allowCreate[$login['setor']]))
+            if (!empty($allowCreate[$login['setor']]) && in_array($entity, $allowCreate[$login['setor']]) && $id)
                 return false;
 
             $dicionario = new Dicionario($entity);
