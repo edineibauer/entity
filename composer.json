@@ -3,8 +3,6 @@
   "description": "Entidades de um sistema",
   "type": "library",
   "license": "MIT",
-  "prefer-stable" : true,
-  "minimum-stability": "dev",
   "authors": [
     {
       "name": "Edinei J. Bauer",
@@ -12,8 +10,8 @@
     }
   ],
   "require": {
-    "php": "^7.0",
-    "conn/entity-form": "dev-master"
+    "php": "^7.2",
+    "conn/entity-form": "1.9.*"
   },
   "autoload": {
     "psr-0": {
