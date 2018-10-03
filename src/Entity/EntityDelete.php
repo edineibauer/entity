@@ -6,6 +6,7 @@ namespace Entity;
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
 use EntityForm\Metadados;
+use EntityForm\React;
 use Helpers\Check;
 
 abstract class EntityDelete
@@ -44,8 +45,10 @@ abstract class EntityDelete
             $del->load($data);
             if ($del->exist()) {
                 if(Entity::checkPermission($entity, $data, $checkPermission)) {
-                    self::deleteLinkedContent($entity, $del->getDados());
+                    $dados = $del->getDados();
+                    self::deleteLinkedContent($entity, $dados);
                     $del->delete();
+                    new React("delete", $entity, $dados, $dados);
                 } else {
                     self::$error[$entity]['id'] = "permissão negada";
                 }
@@ -58,8 +61,10 @@ abstract class EntityDelete
                 $del->loadArray($data);
                 if ($del->exist()) {
                     if(Entity::checkPermission($entity, $data['id'], $checkPermission)) {
-                        self::deleteLinkedContent($entity, $del->getDados());
+                        $dados = $del->getDados();
+                        self::deleteLinkedContent($entity, $dados);
                         $del->delete();
+                        new React("delete", $entity, $dados, $dados);
                     } else {
                         self::$error[$entity]['id'] = "permissão negada";
                     }
