@@ -2,10 +2,8 @@
 
 namespace Entity;
 
-
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
-use EntityForm\Metadados;
 use Helpers\Check;
 
 abstract class EntityCopy extends EntityDelete

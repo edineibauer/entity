@@ -2,11 +2,6 @@
 
 namespace Entity;
 
-
-use EntityForm\Dicionario;
-use EntityForm\Meta;
-use EntityForm\Validate;
-
 abstract class EntityCreate extends EntityRead
 {
     /**

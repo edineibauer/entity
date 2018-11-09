@@ -11,11 +11,11 @@
   ],
   "require": {
     "php": "^7.1",
-    "conn/entity-form": "1.9.*"
+    "conn/dashboard": "*"
   },
   "autoload": {
     "psr-0": {
-      "Entity": "src/"
+      "Entity": "public/src/"
     }
   }
 }

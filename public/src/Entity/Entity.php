@@ -3,8 +3,6 @@
 namespace Entity;
 
 use ConnCrud\Read;
-use EntityForm\Dicionario;
-use EntityForm\Metadados;
 
 class Entity extends EntityCreate
 {

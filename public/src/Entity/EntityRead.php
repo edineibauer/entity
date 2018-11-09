@@ -2,11 +2,8 @@
 
 namespace Entity;
 
-
 use ConnCrud\Read;
 use ConnCrud\TableCrud;
-use EntityForm\Dicionario;
-use EntityForm\Metadados;
 use Helpers\Check;
 use Helpers\Helper;
 
