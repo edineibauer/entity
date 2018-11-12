@@ -23,7 +23,7 @@ class Dicionario
     public function __construct(string $entity)
     {
         $this->entity = $entity;
-        $this->defaultMeta = json_decode(file_get_contents(PATH_HOME . (DOMINIO === "entity-form" ? "" : VENDOR . "entity-form/") . "entity/input_type.json"), true);
+        $this->defaultMeta = json_decode(file_get_contents(PATH_HOME . VENDOR . "entity-form/public/entity/input_type.json"), true);
         if ($dicEntity = Metadados::getDicionario($this->entity, true, true)) {
             foreach ($dicEntity as $i => $item) {
                 if (!isset($item['id']))
