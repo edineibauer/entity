@@ -24,13 +24,9 @@ class Dicionario
     {
         $this->entity = $entity;
         $this->defaultMeta = json_decode(file_get_contents(PATH_HOME . VENDOR . "entity-form/public/entity/input_type.json"), true);
-        if ($dicEntity = Metadados::getDicionario($this->entity, true, true)) {
-            foreach ($dicEntity as $i => $item) {
-                if (!isset($item['id']))
-                    $item['id'] = $i;
-                $this->dicionario[$i] = new Meta($item, $this->defaultMeta['default']);
-            }
-            $this->addSelectUniqueMeta();
+
+        if (!empty($this->entity) && file_exists(PATH_HOME . "entity/cache/{$this->entity}.json")) {
+            $this->defaultDicionarioData();
         } else {
             echo "Entidade não existe";
         }
@@ -43,28 +39,40 @@ class Dicionario
      */
     public function setData($data)
     {
-        if (is_array($data) && !isset($data[0])) {
-            $this->setDataArray($data);
+        $this->metasEdited = [];
+        $this->defaultDicionarioData();
 
-        } elseif (is_numeric($data)) {
-            $read = new Read();
-            $read->exeRead($this->entity, "WHERE id = :id", "id={$data}");
-            if ($read->getResult()) {
-                $dataRead = $read->getResult()[0];
-                foreach ($this->getAssociationMult() as $meta)
-                    $dataRead[$meta->getColumn()] = $this->readMultValues($meta, $dataRead['id']);
+        // ID de dados na tabela
+        if (!empty($data)) {
+            if (is_numeric($data)) {
+                $read = new Read();
+                $read->exeRead($this->entity, "WHERE id = :id", "id={$data}");
+                if ($read->getResult()) {
+                    $dataRead = $read->getResult()[0];
+                    foreach ($this->getAssociationMult() as $meta)
+                        $dataRead[$meta->getColumn()] = $this->readMultValues($meta, $dataRead['id']);
 
-                $this->setDataArray($dataRead);
-            } else {
-                $this->search(0)->setError("Id não existe");
+                    $this->setDataArray($dataRead);
+                } else {
+                    $this->search(0)->setError("Id não existe");
+                }
+
+            } elseif (is_array($data)) {
+                if (!empty($data[0]) && get_class($data[0]) === "Entity\Meta") {
+                    $metas = $data;
+                    $data = [];
+                    foreach ($metas as $meta) {
+                        if (!empty($meta->getValue()) && !empty($meta->getColumn()))
+                            $data[$meta->getColumn()] = $meta->getValue();
+                    }
+                }
+
+                if (!empty($data))
+                    $this->setDataArray($data);
             }
 
-        } elseif (is_object($data) && get_class($data) === "Entity\Meta" && !empty($data->getValue())) {
-            $this->dicionario[$data->getIndice()]->setValue($data->getValue());
-            $this->metasEdited[] = $data->getColumn();
+            Validate::dicionario($this);
         }
-
-        Validate::dicionario($this);
     }
 
     /**
@@ -328,18 +336,18 @@ class Dicionario
             //busca específica
             foreach ($this->dicionario as $item) {
                 $metaColumn = $item->get($attr);
-                if(is_array($metaColumn) && is_array($value)) {
+                if (is_array($metaColumn) && is_array($value)) {
                     $valid = true;
                     foreach ($value as $name => $v) {
-                        if(!isset($metaColumn[$name]) || $metaColumn[$name] !== $v)
+                        if (!isset($metaColumn[$name]) || $metaColumn[$name] !== $v)
                             $valid = false;
                     }
 
-                    if($valid){
+                    if ($valid) {
                         $result = $item;
                         break;
                     }
-                } elseif($metaColumn === $value) {
+                } elseif ($metaColumn === $value) {
                     $result = $item;
                     break;
                 }
@@ -378,11 +386,12 @@ class Dicionario
             if (!$this->getError() || !empty($id))
                 $this->saveAssociacaoSimples();
 
+            // Create or Update Data
             if (!empty($id)) {
-                $dd = new Dicionario($this->entity);
-                $dd->setData($id);
-                $oldDados = $dd->getDataForm();
-                $this->updateTableData();
+                $dicDataAtual = new Dicionario($this->entity);
+                $dicDataAtual->setData($id);
+                $oldDados = $dicDataAtual->getDataForm();
+                $this->updateTableData($id);
             } elseif (!$this->getError()) {
                 $this->createTableData();
             }
@@ -417,24 +426,30 @@ class Dicionario
         }
     }
 
-    private function updateTableData()
+    /**
+     * @param int $id
+     */
+    private function updateTableData(int $id)
     {
-        $id = $this->search(0)->getValue();
         if (Validate::update($this->entity, $id)) {
-            $up = new Update();
             $dadosEntity = $this->getDataOnlyEntity();
             foreach ($this->dicionario as $meta) {
+
+                //Remove metas com erros, metas que não podem ser atualizadas e metas que não pertencem ao escopo
                 if ($meta->getError() || !$meta->getUpdate() || !in_array($meta->getColumn(), $this->metasEdited))
                     unset($dadosEntity[$meta->getColumn()]);
             }
 
-            if(!empty($dadosEntity)) {
+            if (!empty($dadosEntity)) {
+                $up = new Update();
                 $up->exeUpdate($this->entity, $dadosEntity, "WHERE id = :id", "id={$id}");
                 if ($up->getErro())
                     $this->search(0)->setError($up->getErro());
             }
         } else {
-            $this->search(0)->setValue(null, false);
+            $metaId = $this->search(0);
+            $metaId->setValue(null, false);
+            $metaId->setError("Você não tem Permissão para Atualizar estas Informações!");
         }
     }
 
@@ -545,6 +560,22 @@ class Dicionario
             return $value->get($field) === $search;
         }));
         return (!empty($results) ? $results[0] : null);
+    }
+
+    /**
+     * Seta default meta values to dicionario estrutura
+     */
+    private function defaultDicionarioData()
+    {
+        $this->dicionario = [];
+        if ($dicEntity = Metadados::getDicionario($this->entity, true, true)) {
+            foreach ($dicEntity as $i => $item) {
+                if (!isset($item['id']))
+                    $item['id'] = $i;
+                $this->dicionario[$i] = new Meta($item, $this->defaultMeta['default']);
+            }
+            $this->addSelectUniqueMeta();
+        }
     }
 
     private function addSelectUniqueMeta()
