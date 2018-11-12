@@ -53,7 +53,7 @@ abstract class VersionControl
 
         $json = new Json($folder);
         $json->setVersionamento(false);
-        $json->add($id . "#{$this->backup}");
+        $json->add($id . "#{$this->backup}", ['userlogin-action' => "create"]);
     }
 
     /**
