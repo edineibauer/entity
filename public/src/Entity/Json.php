@@ -2,8 +2,8 @@
 
 namespace Entity;
 
-use Helper\Convert;
-use Helper\Helper;
+use Helpers\Helper;
+use Helpers\Check;
 
 class Json extends VersionControl
 {
@@ -16,9 +16,19 @@ class Json extends VersionControl
      * Json constructor.
      * @param string|null $folder
      */
-    public function __construct(string $folder = null)
+    public function __construct(string $folder = "store")
     {
-        $this->folder = $folder ? Convert::name($folder, ["/"]) : "store";
+        $folder = str_replace(PATH_HOME, '', Check::name($folder, ["/"]));
+        $folder = (preg_match('/^\//i', $folder) ? substr($folder, 1) : $folder);
+        $this->folder = (preg_match('/\/$/i', $folder) ? substr($folder, 0, -1) : $folder);
+
+        $dir = "_cdn";
+        Helper::createFolderIfNoExist(PATH_HOME . $dir);
+        foreach (explode('/', $this->folder) as $item) {
+            $dir .= "/{$item}";
+            Helper::createFolderIfNoExist(PATH_HOME . $dir);
+        }
+
         parent::__construct($this->folder);
     }
 
@@ -45,7 +55,7 @@ class Json extends VersionControl
     public function get(string $file): array
     {
         $this->setFile($file);
-        $id = Convert::name(pathinfo($file, PATHINFO_FILENAME));
+        $id = Check::name(pathinfo($file, PATHINFO_FILENAME));
         try {
             if (file_exists($this->file))
                 return array_merge(["id" => $id], json_decode(file_get_contents($this->file), true));
@@ -90,10 +100,10 @@ class Json extends VersionControl
                     //Novo
                     $data['created'] = strtotime("now");
                     $data['updated'] = strtotime("now");
+
                     if ($this->versionamento)
                         parent::deleteVerion($this->file);
 
-                    $this->checkFolder();
                     $f = fopen($this->file, "w+");
                     fwrite($f, json_encode($data));
                     fclose($f);
@@ -122,10 +132,10 @@ class Json extends VersionControl
             $dadosUpdate['updated'] = strtotime("now");
             $dadosAtuais = $this->get($id);
             unset($dadosAtuais['id']);
+            $dadosAtuais['userlogin-action'] = "update";
             if ($this->versionamento)
                 parent::createVerion($this->file, $dadosAtuais, $recursiveVersion);
 
-            $this->checkFolder();
             $f = fopen($this->file, "w+");
             fwrite($f, json_encode(Helper::arrayMerge($dadosAtuais, $dadosUpdate)));
             fclose($f);
@@ -147,6 +157,7 @@ class Json extends VersionControl
         if (file_exists($this->file)) {
             if ($this->versionamento) {
                 $dadosAtuais = $this->get($id);
+                $dadosAtuais['userlogin-action'] = "delete";
                 unset($dadosAtuais['id']);
                 parent::createVerion($this->file, $dadosAtuais);
             }
@@ -164,7 +175,7 @@ class Json extends VersionControl
     public function getVersion(string $id, int $version = 1): array
     {
         $this->setFile($id);
-        $id = Convert::name(pathinfo($id, PATHINFO_FILENAME));
+        $id = Check::name(pathinfo($id, PATHINFO_FILENAME));
         try {
             $fileName = str_replace("{$id}.json", "version/{$id}#{$version}.json", $this->file);
             if (file_exists($fileName))
@@ -195,27 +206,12 @@ class Json extends VersionControl
     {
         if (!$this->id || $id != $this->id) {
             $this->id = $id;
-            $id = Convert::name($id, ["#"]);
+            $id = Check::name($id, ["#"]);
             $this->file = (preg_match("/^" . preg_quote(PATH_HOME, '/') . "/i", $id) ? $id : PATH_HOME . "_cdn/{$this->folder}/{$id}");
 
             // Verifica se é final .json
             if (!preg_match("/\.json$/i", $id))
                 $this->file .= ".json";
-        }
-    }
-
-    /**
-     * Cria diretório caminho do arquivo caso não exista
-     */
-    private function checkFolder()
-    {
-        $dir = PATH_HOME;
-        $folders = explode('/', str_replace(PATH_HOME, '', $this->file));
-        $max = count($folders) - 1;
-        foreach ($folders as $i => $folder) {
-            $dir .= $folder . "/";
-            if ($i < $max)
-                Helper::createFolderIfNoExist($dir);
         }
     }
 }

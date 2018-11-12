@@ -2,7 +2,7 @@
 
 namespace Entity;
 
-use Helper\Helper;
+use Helpers\Helper;
 
 abstract class VersionControl
 {
@@ -47,8 +47,8 @@ abstract class VersionControl
 
         //Deleta qualquer versão existente
         for ($i = $this->backup; $i > 0; $i--) {
-            if (file_exists(PATH_HOME . "_cdn/{$folder}/version/{$id}#{$i}.json"))
-                unlink(PATH_HOME . "_cdn/{$folder}/version/{$id}#{$i}.json");
+            if (file_exists(PATH_HOME . "{$this->folder}/{$folder}/version/{$id}#{$i}.json"))
+                unlink(PATH_HOME . "{$this->folder}/{$folder}/version/{$id}#{$i}.json");
         }
 
         $json = new Json($folder);
@@ -94,7 +94,8 @@ abstract class VersionControl
         $id = pathinfo($file, PATHINFO_FILENAME);
         $dir = pathinfo($file, PATHINFO_DIRNAME);
         $folder = str_replace(PATH_HOME . '_cdn/', '', $dir) . "/version";
-        Helper::createFolderIfNoExist($dir . '/version');
+
+        \Helpers\Helper::createFolderIfNoExist($dir . "/version");
 
         return [$id, $folder];
     }
