@@ -15,7 +15,7 @@ class React
      */
     public function __construct(string $action, string $entity, array $dados, array $dadosOld = [])
     {
-        $this->log($action, $entity, $dados, $dadosOld);
+        $this->log($action, $entity, $dados);
 
         /* CRUD REACT DEFAULT */
         if (file_exists(PATH_HOME . "public/react/{$entity}/{$action}.php"))
@@ -41,7 +41,7 @@ class React
      * @param array $dados
      * @param array $dadosOld
      */
-    public function log(string $action, string $entity, array $dados, array $dadosOld = [])
+    public function log(string $action, string $entity, array $dados)
     {
         $store = new Json("store/{$entity}");
 
