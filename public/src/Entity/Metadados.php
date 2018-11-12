@@ -56,9 +56,9 @@ class Metadados
     public static function getRelevantAll(string $entity)
     {
         if (file_exists(PATH_HOME . "entity/relevant/{$entity}.json"))
-            return json_decode(file_get_contents(PATH_HOME . PATH_HOME . "entity/relevant/{$entity}.json"), true);
+            return json_decode(file_get_contents(PATH_HOME . "entity/relevant/{$entity}.json"), true);
         else
-            return json_decode(file_get_contents(PATH_HOME . VENDOR . "entity-form/entity/relevant.json"), true);
+            return json_decode(file_get_contents(PATH_HOME . VENDOR . "entity-form/public/entity/relevant.json"), true);
     }
 
     /**
