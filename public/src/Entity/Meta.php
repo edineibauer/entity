@@ -53,6 +53,8 @@ class Meta
             $this->checkValueAssociacaoMult($value);
         elseif (in_array($this->key, ["extend", "extend_add", "list", "selecao", "checkbox_rel"]))
             $this->checkValueAssociacaoSimples($value);
+        elseif ($this->key === "source")
+            $this->value = $this->convertSource($value);
         elseif ($this->key === "publisher" && !empty($_SESSION['userlogin']))
             $this->value = $value ?? $_SESSION['userlogin']['id'];
         elseif ($this->key === "publisher")
@@ -630,6 +632,24 @@ class Meta
         }
 
         return (int)$return;
+    }
+
+    private function convertSource($value)
+    {
+        if(is_string($value) && Check::isJson($value))
+            $value = json_decode($value, true);
+
+        if(is_array($value)) {
+            foreach ($value as $i => $item) {
+                foreach ($item as $column => $v) {
+                    if($column === "url")
+                        $value[$i][$column] = str_replace('\\', '/', $v);
+                }
+            }
+            $value = json_encode($value);
+        }
+
+        return $value;
     }
 
     /**
