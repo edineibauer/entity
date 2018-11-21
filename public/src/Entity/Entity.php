@@ -59,6 +59,43 @@ class Entity extends EntityCreate
     }
 
     /**
+     * Retorna o dicionário da entidade ou então a lista de dicionário de entidades permitida
+     * @param string|null $entity
+     */
+    public static function dicionario(string $entity = null)
+    {
+        if(file_exists(PATH_HOME . "entity/cache") && (empty($entity) || file_exists(PATH_HOME . "entity/cache/{$entity}.json"))) {
+            if(empty($entity)){
+
+                //read all dicionarios
+                $list = [];
+                foreach (\Helpers\Helper::listFolder(PATH_HOME . "entity/cache") as $json) {
+                    if(preg_match('/^\w+\.json$/i', $json)){
+                        $entity = str_replace('.json', '', $json);
+                        if($dic = self::dicionario($entity))
+                            $list[$entity] = $dic;
+                    }
+                }
+
+                return $list;
+
+            } else {
+
+                //read dicionario específico
+                $setor = empty($_SESSION['userlogin']['setor']) ? 0 : $_SESSION['userlogin']['setor'];
+                $entidadesNaoPermitidas = \Config\Config::getEntityNotAllow();
+                $entidadesNaoPermitidas = isset($entidadesNaoPermitidas[$setor]) ? $entidadesNaoPermitidas[$setor] : [];
+
+                if(!in_array($entity, $entidadesNaoPermitidas)) {
+                    return \Entity\Metadados::getDicionario($entity, true, true);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param string $entity
      * @param mixed $id
      * @param bool $check
