@@ -7,7 +7,6 @@ use Helpers\Check;
 
 class Json extends VersionControl
 {
-    private $folder;
     private $id;
     private $file;
     private $versionamento = true;
@@ -20,24 +19,16 @@ class Json extends VersionControl
     {
         $folder = str_replace(PATH_HOME, '', Check::name($folder, ["/"]));
         $folder = (preg_match('/^\//i', $folder) ? substr($folder, 1) : $folder);
-        $this->folder = (preg_match('/\/$/i', $folder) ? substr($folder, 0, -1) : $folder);
+        $folder = (preg_match('/\/$/i', $folder) ? substr($folder, 0, -1) : $folder);
+
+        parent::__construct($folder);
 
         $dir = "_cdn";
         Helper::createFolderIfNoExist(PATH_HOME . $dir);
-        foreach (explode('/', $this->folder) as $item) {
+        foreach (explode('/', parent::getFolder()) as $item) {
             $dir .= "/{$item}";
             Helper::createFolderIfNoExist(PATH_HOME . $dir);
         }
-
-        parent::__construct($this->folder);
-    }
-
-    /**
-     * @param string $folder
-     */
-    public function setFolder(string $folder)
-    {
-        $this->folder = $folder;
     }
 
     /**
@@ -207,7 +198,7 @@ class Json extends VersionControl
         if (!$this->id || $id != $this->id) {
             $this->id = $id;
             $id = Check::name($id, ["#"]);
-            $this->file = (preg_match("/^" . preg_quote(PATH_HOME, '/') . "/i", $id) ? $id : PATH_HOME . "_cdn/{$this->folder}/{$id}");
+            $this->file = (preg_match("/^" . preg_quote(PATH_HOME, '/') . "/i", $id) ? $id : PATH_HOME . "_cdn/" . parent::getFolder() . "/{$id}");
 
             // Verifica se é final .json
             if (!preg_match("/\.json$/i", $id))

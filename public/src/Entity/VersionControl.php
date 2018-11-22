@@ -20,6 +20,14 @@ abstract class VersionControl
     }
 
     /**
+     * @return string
+     */
+    protected function getFolder(): string
+    {
+        return $this->folder;
+    }
+
+    /**
      * Cria uma Versão do arquivo
      *
      * @param string $file
@@ -34,6 +42,8 @@ abstract class VersionControl
         $json = new Json($folder);
         $json->setVersionamento(false);
         $json->add($id . "#{$idVersion}", $data);
+
+        $this->updateChangeTimeEntity($folder);
     }
 
     /**
@@ -54,6 +64,29 @@ abstract class VersionControl
         $json = new Json($folder);
         $json->setVersionamento(false);
         $json->add($id . "#{$this->backup}", ['userlogin-action' => "create"]);
+
+        $this->updateChangeTimeEntity($folder);
+    }
+
+    /**
+     * @param string $folder
+     */
+    private function updateChangeTimeEntity(string $folder)
+    {
+        if(preg_match('/\/version$/i', $folder))
+            $folder = substr($folder, 0, -8);
+
+        $part = explode('/', $folder);
+        $entity = array_pop($part);
+        $folder = implode('/', $part);
+
+        $json = new Json($folder);
+        $json->setVersionamento(false);
+
+        $data = $json->get("historic");
+        $data[$entity] = strtotime('now');
+
+        $json->save("historic", $data);
     }
 
     /**
