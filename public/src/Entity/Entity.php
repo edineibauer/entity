@@ -106,8 +106,12 @@ class Entity extends EntityCreate
         $login = $_SESSION['userlogin'] ?? null;
         $allowCreate = file_exists(PATH_HOME . "_config/entity_not_show.json") ? json_decode(file_get_contents(PATH_HOME . "_config/entity_not_show.json"), true) : null;
 
+        //permissão master
+        if(!empty($login['setor']) && $login['setor'] === 1 && $login['nivel'] === 1)
+            return true;
+
         if (!$login) {
-            //Anônimo
+            //Anônimo tem permissão para criar caso não esteja na lista negra
             return (!$id && !in_array($entity, $allowCreate[0]));
 
         } else {
