@@ -392,7 +392,7 @@ class Validate
                     }
                 }
             }
-        } elseif (!empty($m->getAllow()['values']) && !empty($m->getValue()) && !in_array($m->getValue(), $m->getAllow()['values'])) {
+        } elseif (!empty($m->getAllow()['values']) && $m->getKey() !== "information" && !empty($m->getValue()) && !in_array($m->getValue(), $m->getAllow()['values'])) {
             $m->setError("valor não é permitido");
         }
     }
