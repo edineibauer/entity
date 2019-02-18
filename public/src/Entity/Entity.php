@@ -182,7 +182,7 @@ class Entity extends EntityCreate
                         return false;
                 }
 
-                if (($login['setor'] == $tableData['setor'] && $login['nivel'] < $tableData['nivel']) || $login['id'] === $tableData['id'] || $login['setor'] < $tableData['setor'])
+                if (($login['setor'] == $tableData['setor'] && $login['nivel'] < $tableData['nivel']) || $login['id'] === $tableData['id'] || $tableData['setor'] > ADM)
                     return true;
             }
 
