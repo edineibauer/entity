@@ -134,14 +134,18 @@ class Dicionario
     /**
      * Retorna os valores do dicionárioo de forma a preencher as necessidades do Form Crud
      *
-     * @param string $column
-     * @return mixed
+     * @return array
      */
-    public function getDataForm()
+    public function getDataForm(): array
     {
-        $data = null;
-        foreach ($this->dicionario as $meta)
-            $data[$meta->getColumn()] = $meta->getValue();
+        $data = [];
+        foreach ($this->dicionario as $meta) {
+            if($meta->getFormat() === "password") {
+                $data[$meta->getColumn()] = "";
+            } else {
+                $data[$meta->getColumn()] = $meta->getValue();
+            }
+        }
 
         return $data;
     }
