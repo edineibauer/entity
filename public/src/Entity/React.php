@@ -53,14 +53,16 @@ class React
      */
     public function log(string $action, string $entity, array $dados)
     {
-        $store = new Json("store/{$entity}");
+        if (!empty($dados['id'])) {
+            $store = new Json("store/{$entity}");
 
-        if(!empty($_SESSION['userlogin']))
-            $dados['userlogin'] = $_SESSION['userlogin']['id'];
+            if (!empty($_SESSION['userlogin']))
+                $dados['userlogin'] = $_SESSION['userlogin']['id'];
 
-        if($action === "delete")
-            $store->delete($dados['id']);
-        else
-            $store->save($dados['id'], $dados);
+            if ($action === "delete")
+                $store->delete($dados['id']);
+            else
+                $store->save($dados['id'], $dados);
+        }
     }
 }
