@@ -6,6 +6,17 @@ use Helpers\Helper;
 
 class React
 {
+
+    private $response;
+
+    /**
+     * @return mixed
+     */
+    public function getResponse()
+    {
+        return $this->response;
+    }
+
     /**
      * React constructor.
      * @param string $action
@@ -17,6 +28,7 @@ class React
     {
         $this->log($action, $entity, $dados);
 
+        $data = ["data" => "", "response" => 1, "error" => ""];
         if (!empty($_SESSION['userlogin']['setor']) && file_exists(PATH_HOME . "public/react/{$entity}/{$_SESSION['userlogin']['setor']}/{$action}.php"))
             include PATH_HOME . "public/react/{$entity}/{$_SESSION['userlogin']['setor']}/{$action}.php";
         elseif (file_exists(PATH_HOME . "public/react/{$entity}/{$action}.php"))
@@ -28,6 +40,8 @@ class React
             elseif (file_exists(PATH_HOME . VENDOR . "{$lib}/public/react/{$entity}/{$action}.php"))
                 include PATH_HOME . VENDOR . "{$lib}/public/react/{$entity}/{$action}.php";
         }
+
+        $this->response = $data;
     }
 
     /**
