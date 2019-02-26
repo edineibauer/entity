@@ -49,7 +49,6 @@ class React
      * @param string $action
      * @param string $entity
      * @param array $dados
-     * @param array $dadosOld
      */
     public function log(string $action, string $entity, array $dados)
     {

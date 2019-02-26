@@ -116,6 +116,8 @@ class Entity extends EntityCreate
             return (!$id && !in_array($entity, $allowCreate[0]));
 
         } else {
+            return true;
+
             //Logado
             //Bloqueia Alterações ou Criação em entidades selecionadas para o setor do usuário
             if (!empty($allowCreate[$login['setor']]) && in_array($entity, $allowCreate[$login['setor']]) && $id)
